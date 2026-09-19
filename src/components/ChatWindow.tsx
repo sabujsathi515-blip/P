@@ -153,12 +153,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-100/60 dark:bg-slate-950 relative overflow-hidden">
       {/* Top Header */}
-      <div className="h-16 px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 z-10 shadow-xs">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="h-16 px-3 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 z-10 shadow-xs">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {onBackMobile && (
             <button
               onClick={onBackMobile}
-              className="md:hidden p-1.5 -ml-1 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg cursor-pointer"
+              className="md:hidden p-2 -ml-1 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer active:scale-90 transition-transform shrink-0"
+              title="চ্যাট লিস্টে ফিরে যান"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -452,7 +453,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       {/* Message Input Form */}
       <form
         onSubmit={handleSend}
-        className={`p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 z-10 shrink-0 transition-colors ${
+        className={`p-2.5 sm:p-3 pb-[max(env(safe-area-inset-bottom),12px)] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-1.5 sm:gap-2 z-10 shrink-0 transition-colors ${
           isSecretSend ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''
         }`}
       >

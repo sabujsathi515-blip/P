@@ -70,18 +70,18 @@ export const CallControls: React.FC<CallControlsProps> = ({
   };
 
   return (
-    <div className="flex items-center justify-center gap-2 sm:gap-3 px-4 py-3 bg-slate-900/90 backdrop-blur-md rounded-3xl border border-slate-800 shadow-2xl">
+    <div className="flex items-center justify-center gap-1.5 sm:gap-3 px-2.5 sm:px-4 py-2 sm:py-3 bg-slate-900/95 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-slate-800 shadow-2xl max-w-[96vw] overflow-x-auto">
       {/* Microphone Mute / Unmute */}
       <button
         onClick={onToggleMute}
         title={isMuted ? 'Unmute Microphone' : 'Mute Microphone'}
-        className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
           isMuted
             ? 'bg-rose-600/90 text-white hover:bg-rose-500'
             : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
         }`}
       >
-        {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+        {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
       </button>
 
       {/* Camera On / Off (if Video call) */}
@@ -89,13 +89,13 @@ export const CallControls: React.FC<CallControlsProps> = ({
         <button
           onClick={onToggleCamera}
           title={isCameraOff ? 'Turn Camera On' : 'Turn Camera Off'}
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
             isCameraOff
               ? 'bg-rose-600/90 text-white hover:bg-rose-500'
               : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
           }`}
         >
-          {isCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+          {isCameraOff ? <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Video className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>
       )}
 
@@ -104,13 +104,13 @@ export const CallControls: React.FC<CallControlsProps> = ({
         <button
           onClick={onToggleScreenShare}
           title={isScreenSharing ? 'Stop Screen Share' : 'Share Screen'}
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
             isScreenSharing
               ? 'bg-sky-500 text-white hover:bg-sky-400'
               : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
           }`}
         >
-          {isScreenSharing ? <MonitorOff className="w-5 h-5" /> : <MonitorUp className="w-5 h-5" />}
+          {isScreenSharing ? <MonitorOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <MonitorUp className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>
       )}
 
@@ -118,26 +118,26 @@ export const CallControls: React.FC<CallControlsProps> = ({
       <button
         onClick={onToggleSpeaker}
         title={isSpeakerOn ? 'Speaker On' : 'Speaker Off'}
-        className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
           isSpeakerOn
             ? 'bg-slate-800 text-slate-100 hover:bg-slate-700'
             : 'bg-amber-600 text-white hover:bg-amber-500'
         }`}
       >
-        {isSpeakerOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+        {isSpeakerOn ? <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <VolumeX className="w-4 h-4 sm:w-5 sm:h-5" />}
       </button>
 
       {/* In-Call Chat Drawer Toggle */}
       <button
         onClick={onToggleChat}
         title={isChatOpen ? 'Close Chat' : 'Open In-Call Chat'}
-        className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
           isChatOpen
             ? 'bg-sky-500 text-white hover:bg-sky-400'
             : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
         }`}
       >
-        <MessageSquare className="w-5 h-5" />
+        <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
       </button>
 
       {/* Copy / Share Call Link */}
@@ -145,9 +145,9 @@ export const CallControls: React.FC<CallControlsProps> = ({
         <button
           onClick={handleCopyLink}
           title="Share Call Link"
-          className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-100 hover:bg-slate-700 flex items-center justify-center transition-all cursor-pointer"
+          className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-slate-800 text-slate-100 hover:bg-slate-700 flex items-center justify-center transition-all cursor-pointer shrink-0"
         >
-          {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Share2 className="w-5 h-5" />}
+          {copied ? <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" /> : <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>
       )}
 
@@ -155,9 +155,9 @@ export const CallControls: React.FC<CallControlsProps> = ({
       <button
         onClick={onEndCall}
         title="End Call"
-        className="w-14 h-12 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer ml-1"
+        className="w-12 sm:w-14 h-10 sm:h-12 rounded-xl sm:rounded-2xl bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer ml-1 shrink-0"
       >
-        <PhoneOff className="w-6 h-6" />
+        <PhoneOff className="w-5 h-5 sm:w-6 sm:h-6" />
       </button>
     </div>
   );
