@@ -18,6 +18,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess, onClose }) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [about, setAbout] = useState('Hey there! I am using ConnectCall.');
   const [photoURL, setPhotoURL] = useState('');
 
@@ -65,7 +66,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess, onClose }) => {
     clearForm();
     setLoading(true);
     try {
-      await register(fullName, email, password, photoURL || undefined, about);
+      await register(fullName, email, password, photoURL || undefined, about, phoneNumber || undefined);
       onSuccess?.();
     } catch (err: unknown) {
       setError((err as Error).message || 'Registration failed');
@@ -431,6 +432,22 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess, onClose }) => {
                 onChange={(e) => setPhotoURL(e.target.value)}
                 className="w-full text-xs px-3 py-2 bg-slate-800 text-white border border-slate-700 rounded-xl focus:outline-hidden"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                Contact Number (ফোন নম্বর - ঐচ্ছিক)
+              </label>
+              <div className="relative">
+                <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="tel"
+                  placeholder="+880 1712-345678 বা 01712345678"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  className="w-full pl-9 pr-3.5 py-2 text-sm bg-slate-800 text-white border border-slate-700 rounded-xl focus:outline-hidden font-mono"
+                />
+              </div>
             </div>
 
             <div>

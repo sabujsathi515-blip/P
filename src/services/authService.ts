@@ -9,7 +9,7 @@ import {
   onAuthStateChanged,
   type User,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured, handleFirestoreError, OperationType } from './firebase';
 import type { UserProfile } from '../types/user';
 
@@ -19,6 +19,7 @@ export const DEMO_USERS: UserProfile[] = [
     userId: 'demo-user-1',
     name: 'Sarah Connor',
     email: 'sarah@connectcall.io',
+    phoneNumber: '+880 1711-234567',
     photoURL: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
     about: 'Always ready for an audio or video call! 🚀',
     online: true,
@@ -29,6 +30,7 @@ export const DEMO_USERS: UserProfile[] = [
     userId: 'demo-user-2',
     name: 'Alex Vance',
     email: 'alex@connectcall.io',
+    phoneNumber: '+880 1812-345678',
     photoURL: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
     about: 'Working on WebRTC & real-time communication.',
     online: true,
@@ -39,6 +41,7 @@ export const DEMO_USERS: UserProfile[] = [
     userId: 'demo-user-3',
     name: 'David Chen',
     email: 'david@connectcall.io',
+    phoneNumber: '+1 (555) 345-6789',
     photoURL: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&auto=format&fit=crop&q=80',
     about: 'Available during regular office hours.',
     online: false,
@@ -49,6 +52,7 @@ export const DEMO_USERS: UserProfile[] = [
     userId: 'demo-user-4',
     name: 'Elena Rostova',
     email: 'elena@connectcall.io',
+    phoneNumber: '+44 7700 900123',
     photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     about: 'Design & UX lead at ConnectCall 🎨',
     online: true,
@@ -63,7 +67,23 @@ const LOCAL_STORAGE_KEY_CURRENT_USER = 'connectcall_current_demo_user';
 export const getLocalDemoUsers = (): UserProfile[] => {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY_DEMO_USERS);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: UserProfile[] = JSON.parse(raw);
+      // Ensure existing demo users have phone numbers populated
+      let modified = false;
+      const merged = parsed.map((u) => {
+        const defaultMatch = DEMO_USERS.find((d) => d.userId === u.userId);
+        if (defaultMatch && !u.phoneNumber) {
+          modified = true;
+          return { ...u, phoneNumber: defaultMatch.phoneNumber };
+        }
+        return u;
+      });
+      if (modified) {
+        saveLocalDemoUsers(merged);
+      }
+      return merged;
+    }
   } catch (e) {
     console.error('Failed to load demo users', e);
   }
@@ -139,7 +159,8 @@ export class AuthService {
     email: string,
     pass: string,
     photoURL?: string,
-    about?: string
+    about?: string,
+    phoneNumber?: string
   ): Promise<UserProfile> {
     if (isFirebaseConfigured() && auth && db) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
@@ -156,6 +177,7 @@ export class AuthService {
         userId: user.uid,
         name: name || user.displayName || 'ConnectCall User',
         email: user.email || email,
+        phoneNumber: phoneNumber || undefined,
         photoURL: photoURL || undefined,
         about: about || 'Hey there! I am using ConnectCall.',
         online: true,
@@ -178,6 +200,7 @@ export class AuthService {
         userId: newId,
         name,
         email,
+        phoneNumber: phoneNumber || undefined,
         photoURL: photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
         about: about || 'Hey there! I am using ConnectCall.',
         online: true,
@@ -190,6 +213,80 @@ export class AuthService {
       localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(newProfile));
       return newProfile;
     }
+  }
+
+  // Add a new contact to the directory by Email ID
+  public static async addNewContact(data: {
+    email: string;
+    name?: string;
+    phoneNumber?: string;
+    about?: string;
+    photoURL?: string;
+  }): Promise<UserProfile> {
+    const cleanEmail = data.email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('অনুগ্রহ করে সঠিক ইমেইল আইডি লিখুন (যেমন: name@example.com)');
+    }
+
+    // Check if user with this email already exists in Firestore
+    if (isFirebaseConfigured() && db) {
+      try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', cleanEmail));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const docData = snapshot.docs[0].data() as UserProfile;
+          return {
+            ...docData,
+            userId: snapshot.docs[0].id,
+          };
+        }
+      } catch (err) {
+        console.warn('Could not query firestore for email, falling back to local/creation', err);
+      }
+    }
+
+    // Check if user already exists in demo storage
+    const demoUsers = getLocalDemoUsers();
+    const existing = demoUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      return existing;
+    }
+
+    // Generate fallback readable name from email username (e.g. "sabujsathi515" -> "Sabujsathi515")
+    const usernamePart = cleanEmail.split('@')[0];
+    const derivedName = usernamePart
+      .replace(/[._-]/g, ' ')
+      .split(' ')
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ') || 'User';
+
+    const contactName = data.name?.trim() || derivedName;
+    const contactId = 'contact-' + Math.random().toString(36).substring(2, 9);
+    
+    const newContact: UserProfile = {
+      userId: contactId,
+      name: contactName,
+      email: cleanEmail,
+      phoneNumber: data.phoneNumber?.trim() || undefined,
+      about: data.about?.trim() || 'Connected via Email ID',
+      photoURL: data.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanEmail)}`,
+      online: true,
+      lastSeen: Date.now(),
+      createdAt: Date.now(),
+    };
+
+    if (isFirebaseConfigured() && db) {
+      await this.saveUserProfile(newContact);
+    } else {
+      demoUsers.push(newContact);
+      saveLocalDemoUsers(demoUsers);
+      // Trigger storage event so other tabs and subscribers update
+      window.dispatchEvent(new Event('storage'));
+    }
+
+    return newContact;
   }
 
   // Login

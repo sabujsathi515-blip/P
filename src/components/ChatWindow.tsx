@@ -19,6 +19,7 @@ import {
   EyeOff,
   Flame,
   Shield,
+  Mail,
 } from 'lucide-react';
 
 interface ChatWindowProps {
@@ -207,7 +208,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               )}
             </div>
 
-            <p className="text-[12px] text-slate-500 dark:text-slate-400 truncate">
+            <div className="flex items-center gap-1.5 text-[12px] text-slate-500 dark:text-slate-400 truncate">
+              {partner.email && (
+                <span className="text-sky-600 dark:text-sky-400 font-medium shrink-0 flex items-center gap-1">
+                  <Mail className="w-3 h-3 text-sky-500 shrink-0" />
+                  <span className="truncate max-w-[130px] sm:max-w-[200px]">{partner.email}</span>
+                  <span className="text-slate-300 dark:text-slate-600">•</span>
+                </span>
+              )}
               {isPartnerTyping ? (
                 <span className="text-sky-500 dark:text-sky-400 font-semibold animate-pulse">
                   typing...
@@ -217,7 +225,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               ) : (
                 `Last seen: ${formatLastSeen(partner.lastSeen)}`
               )}
-            </p>
+            </div>
           </div>
         </div>
 

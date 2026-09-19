@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   ShieldCheck,
+  Mail,
 } from 'lucide-react';
 
 interface ChatListProps {
@@ -76,9 +77,11 @@ export const ChatList: React.FC<ChatListProps> = ({
     const partner = getPartnerInfo(chat);
     if (!filterQuery.trim()) return true;
     const q = filterQuery.toLowerCase();
+    const qDigits = filterQuery.replace(/[^0-9]/g, '');
     return (
       partner.name.toLowerCase().includes(q) ||
       partner.email.toLowerCase().includes(q) ||
+      (partner.phoneNumber && (partner.phoneNumber.toLowerCase().includes(q) || (qDigits.length > 2 && partner.phoneNumber.replace(/[^0-9]/g, '').includes(qDigits)))) ||
       (chat.lastMessage?.text.toLowerCase().includes(q) ?? false)
     );
   });
@@ -307,17 +310,52 @@ export const ChatList: React.FC<ChatListProps> = ({
       </div>
 
       {/* Search Input */}
-      <div className="p-3 pb-2">
+      <div className="p-3 pb-2 space-y-2">
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search chats or messages..."
+            placeholder="Search by email or name..."
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             className="w-full pl-9 pr-3.5 py-2 text-sm bg-slate-100 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60 rounded-xl text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all"
           />
         </div>
+
+        {filterQuery.includes('@') && (
+          <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/60 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Mail className="w-4 h-4 text-sky-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-sky-900 dark:text-sky-200 truncate">{filterQuery.trim()}</p>
+                <p className="text-[11px] text-sky-600 dark:text-sky-400">এই ইমেইলে চ্যাট বা কানেক্ট করুন</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const cleanEmail = filterQuery.trim().toLowerCase();
+                const existing = allUsers.find(u => u.email.toLowerCase() === cleanEmail);
+                if (existing) {
+                  const existingChat = chats.find(c => c.participants.includes(existing.userId));
+                  if (existingChat) {
+                    onSelectChat(existingChat, existing);
+                  } else {
+                    onSelectChat({
+                      chatId: 'chat_' + [currentUserId, existing.userId].sort().join('_'),
+                      participants: [currentUserId, existing.userId],
+                      updatedAt: Date.now(),
+                    }, existing);
+                  }
+                } else {
+                  onNewChatClick();
+                }
+              }}
+              className="px-2.5 py-1 text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white rounded-lg cursor-pointer shrink-0 transition-colors"
+            >
+              চ্যাট করুন
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Secret Vault Section Header */}

@@ -9,7 +9,8 @@ interface AuthContextType {
   isFirebase: boolean;
   demoUsers: UserProfile[];
   login: (email: string, pass: string) => Promise<UserProfile>;
-  register: (name: string, email: string, pass: string, photoURL?: string, about?: string) => Promise<UserProfile>;
+  register: (name: string, email: string, pass: string, photoURL?: string, about?: string, phoneNumber?: string) => Promise<UserProfile>;
+  addNewContact: (contact: { email: string; name?: string; phoneNumber?: string; about?: string; photoURL?: string }) => Promise<UserProfile>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -107,10 +108,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (name: string, email: string, pass: string, photoURL?: string, about?: string) => {
+  const register = async (name: string, email: string, pass: string, photoURL?: string, about?: string, phoneNumber?: string) => {
     setLoading(true);
     try {
-      const profile = await AuthService.register(name, email, pass, photoURL, about);
+      const profile = await AuthService.register(name, email, pass, photoURL, about, phoneNumber);
       localStorage.removeItem('connectcall_logged_out');
       setUser(profile);
       refreshDemoUsers();
@@ -118,6 +119,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setLoading(false);
     }
+  };
+
+  const addNewContact = async (contact: { email: string; name?: string; phoneNumber?: string; about?: string; photoURL?: string }) => {
+    const created = await AuthService.addNewContact(contact);
+    refreshDemoUsers();
+    return created;
   };
 
   const logout = async () => {
@@ -171,6 +178,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         demoUsers,
         login,
         register,
+        addNewContact,
         logout,
         updateProfile,
         resetPassword,

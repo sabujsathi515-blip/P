@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { UserProfile } from '../types/user';
 import { useAuth } from '../contexts/AuthContext';
-import { Camera, Save, LogOut, Check, Key, UserCheck, Shield } from 'lucide-react';
+import { Camera, Save, LogOut, Check, Key, UserCheck, Shield, Phone } from 'lucide-react';
 
 interface ProfileProps {
   user: UserProfile;
@@ -11,6 +11,7 @@ export const Profile: React.FC<ProfileProps> = ({ user }) => {
   const { updateProfile, logout, resetPassword } = useAuth();
 
   const [name, setName] = useState(user.name);
+  const [phoneNumber, setPhoneNumber] = useState(user.phoneNumber || '');
   const [about, setAbout] = useState(user.about || '');
   const [photoURL, setPhotoURL] = useState(user.photoURL || '');
   const [saving, setSaving] = useState(false);
@@ -34,6 +35,7 @@ export const Profile: React.FC<ProfileProps> = ({ user }) => {
     try {
       await updateProfile({
         name,
+        phoneNumber,
         about,
         photoURL,
       });
@@ -128,6 +130,25 @@ export const Profile: React.FC<ProfileProps> = ({ user }) => {
               disabled
               className="w-full px-3.5 py-2.5 text-sm bg-slate-100/60 dark:bg-slate-800/40 text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl cursor-not-allowed"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+              Contact Number (ফোন নম্বর)
+            </label>
+            <div className="relative">
+              <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="+880 1712-345678"
+                className="w-full pl-10 pr-3.5 py-2.5 text-sm bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all font-mono"
+              />
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              অন্যান্য ইউজাররা এই নম্বরে আপনাকে কল বা মেসেজ করতে পারবেন।
+            </p>
           </div>
 
           <div>
