@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="callGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0369a1" />
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="url(#callGrad)"/>
+  <!-- Phone receiver + video camera combo -->
+  <path d="M60 64 C60 56 68 48 76 48 L82 48 C86 48 90 51 92 55 L98 67 C100 71 99 76 95 79 L88 84 C94 96 104 106 116 112 L121 105 C124 101 129 100 133 102 L145 108 C149 110 152 114 152 118 L152 124 C152 132 144 140 136 140 C94 140 60 106 60 64 Z" fill="#ffffff"/>
+  <!-- Signal wave dots -->
+  <circle cx="132" cy="62" r="7" fill="#38bdf8" />
+  <circle cx="146" cy="76" r="6" fill="#7dd3fc" />
+  <circle cx="118" cy="52" r="5" fill="#bae6fd" />
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="callGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0369a1" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#callGrad512)"/>
+  <path d="M160 170 C160 150 180 130 202 130 L218 130 C228 130 240 138 245 148 L260 180 C265 190 263 203 252 212 L234 225 C250 258 278 284 311 300 L324 282 C333 271 346 269 356 274 L388 289 C398 294 406 306 406 316 L406 332 C406 354 386 374 364 374 C252 374 160 282 160 170 Z" fill="#ffffff"/>
+  <circle cx="352" cy="166" r="18" fill="#38bdf8" />
+  <circle cx="390" cy="204" r="15" fill="#7dd3fc" />
+  <circle cx="314" cy="140" r="12" fill="#bae6fd" />
+</svg>

@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "UserProfile": {
+      "collection": "users",
+      "fields": {
+        "userId": { "type": "string", "description": "Unique user ID" },
+        "name": { "type": "string", "description": "Display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "photoURL": { "type": "string", "description": "Avatar image URL" },
+        "about": { "type": "string", "description": "Status or bio" },
+        "online": { "type": "boolean", "description": "Current presence state" },
+        "lastSeen": { "type": "number", "description": "Unix timestamp in ms" },
+        "inCall": { "type": "boolean", "description": "Whether currently on an active call" },
+        "activeCallId": { "type": "string", "description": "Current active call room ID" },
+        "createdAt": { "type": "number", "description": "Account registration timestamp" }
+      }
+    },
+    "Chat": {
+      "collection": "chats",
+      "fields": {
+        "chatId": { "type": "string", "description": "Unique conversation ID" },
+        "participants": { "type": "array", "description": "List of user IDs" },
+        "updatedAt": { "type": "number", "description": "Last activity timestamp" },
+        "lastMessage": { "type": "object", "description": "Snippet of last message" },
+        "unreadCount": { "type": "object", "description": "Map of user ID to unread messages count" },
+        "typingUsers": { "type": "object", "description": "Map of user ID to typing boolean" }
+      }
+    },
+    "Message": {
+      "collection": "chats/{chatId}/messages",
+      "fields": {
+        "messageId": { "type": "string", "description": "Message identifier" },
+        "chatId": { "type": "string", "description": "Associated chat room" },
+        "senderId": { "type": "string", "description": "User ID of sender" },
+        "receiverId": { "type": "string", "description": "User ID of recipient" },
+        "text": { "type": "string", "description": "Text body" },
+        "timestamp": { "type": "number", "description": "Unix timestamp in ms" },
+        "status": { "type": "string", "description": "sent | delivered | seen" },
+        "replyTo": { "type": "object", "description": "Quoted message information" }
+      }
+    },
+    "CallRoom": {
+      "collection": "callRooms",
+      "fields": {
+        "roomId": { "type": "string", "description": "Unique call room ID e.g. CONNECTCALL-8F72KD" },
+        "callerId": { "type": "string", "description": "Caller user ID" },
+        "receiverId": { "type": "string", "description": "Receiver user ID" },
+        "callerName": { "type": "string", "description": "Caller display name" },
+        "callerPhoto": { "type": "string", "description": "Caller avatar URL" },
+        "receiverName": { "type": "string", "description": "Receiver display name" },
+        "receiverPhoto": { "type": "string", "description": "Receiver avatar URL" },
+        "callType": { "type": "string", "description": "audio | video" },
+        "offer": { "type": "object", "description": "WebRTC SDP offer" },
+        "answer": { "type": "object", "description": "WebRTC SDP answer" },
+        "status": { "type": "string", "description": "calling | ringing | connecting | connected | ended | declined | missed | busy | failed" },
+        "callerCandidates": { "type": "array", "description": "Caller ICE candidates" },
+        "receiverCandidates": { "type": "array", "description": "Receiver ICE candidates" },
+        "createdAt": { "type": "number", "description": "Creation timestamp in ms" },
+        "connectedAt": { "type": "number", "description": "WebRTC connection timestamp" },
+        "endedAt": { "type": "number", "description": "Call ended timestamp" },
+        "duration": { "type": "number", "description": "Call duration in seconds" }
+      }
+    },
+    "CallRecord": {
+      "collection": "calls",
+      "fields": {
+        "callId": { "type": "string", "description": "Unique call log ID" },
+        "callerId": { "type": "string", "description": "Caller user ID" },
+        "receiverId": { "type": "string", "description": "Receiver user ID" },
+        "callerName": { "type": "string", "description": "Caller display name" },
+        "callerPhoto": { "type": "string", "description": "Caller avatar" },
+        "receiverName": { "type": "string", "description": "Receiver display name" },
+        "receiverPhoto": { "type": "string", "description": "Receiver avatar" },
+        "type": { "type": "string", "description": "audio | video" },
+        "status": { "type": "string", "description": "completed | missed | declined | failed" },
+        "startedAt": { "type": "number", "description": "Start timestamp in ms" },
+        "endedAt": { "type": "number", "description": "End timestamp in ms" },
+        "duration": { "type": "number", "description": "Call length in seconds" }
+      }
+    }
+  }
+}

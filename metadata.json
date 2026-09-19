@@ -1,0 +1,13 @@
+{
+  "name": "ConnectCall",
+  "description": "WhatsApp-style real-time messaging, WebRTC one-to-one audio and video calling web application with screen sharing.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "display-capture"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
+

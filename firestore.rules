@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user is the document owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users Collection: Authenticated users can read directory; users can only edit their own profile
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
+    // Chats Collection: Only participants can read or update chat metadata
+    match /chats/{chatId} {
+      allow read, write: if isAuthenticated() && (
+        resource == null || request.auth.uid in resource.data.participants
+      );
+
+      // Messages Subcollection: Only participants can read and write messages
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+
+    // Call Rooms: Room signaling for WebRTC offer/answer/candidates
+    match /callRooms/{roomId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Calls Collection: Call history records
+    match /calls/{callId} {
+      allow read: if isAuthenticated() && (
+        resource == null ||
+        resource.data.callerId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+  }
+}
