@@ -589,7 +589,10 @@ export class AuthService {
             const serverUsers: UserProfile[] = await res.json();
             if (Array.isArray(serverUsers) && serverUsers.length > 0) {
               onUsers(serverUsers);
-              saveLocalDemoUsers(serverUsers);
+              const currentLocal = getLocalDemoUsers();
+              if (currentLocal.length !== serverUsers.length) {
+                saveLocalDemoUsers(serverUsers);
+              }
               return;
             }
           }

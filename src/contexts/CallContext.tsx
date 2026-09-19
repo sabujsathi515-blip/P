@@ -64,6 +64,15 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const processedCandidatesRef = useRef<Set<string>>(new Set());
   const currentRoomIdRef = useRef<string | null>(null);
 
+  const activeCallRef = useRef<CallRoom | null>(null);
+  activeCallRef.current = activeCall;
+
+  const userRef = useRef<UserProfile | null>(null);
+  userRef.current = user;
+
+  const callDurationRef = useRef<number>(0);
+  callDurationRef.current = callDuration;
+
   // Format MM:SS duration
   const formatDuration = (totalSeconds: number): string => {
     const mins = Math.floor(totalSeconds / 60);
@@ -121,7 +130,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [callStatus]);
 
-  // Clean end call helper
+  // Clean end call helper - stable callback reference with zero cycle dependencies
   const cleanUpCall = useCallback(async (finalStatus: CallStatus = 'ended') => {
     soundService.stopAllSounds();
     if (timerRef.current) {
@@ -133,28 +142,31 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unansweredTimerRef.current = null;
     }
 
-    if (activeCall && user) {
-      const durationSeconds = callDuration;
+    const currentActiveCall = activeCallRef.current;
+    const currentUser = userRef.current;
+
+    if (currentActiveCall && currentUser) {
+      const durationSeconds = callDurationRef.current;
       // Record history
       await CallService.recordCallHistory({
-        callerId: activeCall.callerId,
-        receiverId: activeCall.receiverId,
-        callerName: activeCall.callerName,
-        callerPhoto: activeCall.callerPhoto,
-        receiverName: activeCall.receiverName,
-        receiverPhoto: activeCall.receiverPhoto,
-        type: activeCall.callType,
+        callerId: currentActiveCall.callerId,
+        receiverId: currentActiveCall.receiverId,
+        callerName: currentActiveCall.callerName,
+        callerPhoto: currentActiveCall.callerPhoto,
+        receiverName: currentActiveCall.receiverName,
+        receiverPhoto: currentActiveCall.receiverPhoto,
+        type: currentActiveCall.callType,
         status: finalStatus,
-        startedAt: activeCall.createdAt,
+        startedAt: currentActiveCall.createdAt,
         endedAt: Date.now(),
         duration: durationSeconds,
       }).catch(console.error);
 
       // Update room in Firestore
-      await CallService.updateCallStatus(activeCall.roomId, finalStatus, durationSeconds).catch(console.error);
+      await CallService.updateCallStatus(currentActiveCall.roomId, finalStatus, durationSeconds).catch(console.error);
 
       // Mark user no longer in call
-      await AuthService.setUserCallStatus(user.userId, false).catch(console.error);
+      await AuthService.setUserCallStatus(currentUser.userId, false).catch(console.error);
     }
 
     if (webrtcRef.current) {
@@ -172,26 +184,33 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsScreenSharing(false);
     setChatDrawerOpen(false);
     processedCandidatesRef.current.clear();
-  }, [activeCall, callDuration, user]);
+  }, []);
 
-  // Listen for incoming calls
+  // Listen for incoming calls - ONLY depends on user ID
   useEffect(() => {
-    if (!user) return;
+    if (!user?.userId) return;
 
     const unsub = CallService.subscribeToIncomingCalls(user.userId, (room) => {
-      // Don't trigger if already in a call with someone else
-      if (room && !activeCall) {
-        setIncomingCall(room);
-        soundService.playIncomingRing();
-        NotificationService.notifyIncomingCall(room.callerName, room.callType);
-      } else if (!room && incomingCall) {
-        setIncomingCall(null);
-        soundService.stopAllSounds();
+      if (room && !activeCallRef.current) {
+        setIncomingCall((prev) => {
+          if (prev?.roomId === room.roomId && prev?.status === room.status) {
+            return prev;
+          }
+          soundService.playIncomingRing();
+          NotificationService.notifyIncomingCall(room.callerName, room.callType);
+          return room;
+        });
+      } else if (!room) {
+        setIncomingCall((prev) => {
+          if (!prev) return null;
+          soundService.stopAllSounds();
+          return null;
+        });
       }
     });
 
     return () => unsub();
-  }, [user, activeCall, incomingCall]);
+  }, [user?.userId]);
 
   // Start outgoing call
   const startCall = async (targetUser: UserProfile, type: CallType, existingRoomId?: string) => {
@@ -398,7 +417,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => unsub();
-  }, [activeCall?.roomId, user, cleanUpCall]);
+  }, [activeCall?.roomId, user?.userId, cleanUpCall]);
 
   // Controls: Mute
   const toggleMute = () => {

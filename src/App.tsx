@@ -99,34 +99,47 @@ function MainAppContent() {
     setReplyingTo,
   } = useChat();
 
+  const handledRoomRef = React.useRef(false);
+
   // Load registered/demo users directory
   useEffect(() => {
-    if (!user) return;
+    if (!user?.userId) return;
     const unsub = AuthService.subscribeToAllUsers(
       (users) => {
-        setAllUsers(users);
+        setAllUsers((prev) => {
+          if (
+            prev.length === users.length &&
+            prev.every((u, i) => u.userId === users[i]?.userId && u.online === users[i]?.online && u.inCall === users[i]?.inCall)
+          ) {
+            return prev;
+          }
+          return users;
+        });
       },
       () => {
         setAllUsers(demoUsers);
       }
     );
     return () => unsub();
-  }, [user, demoUsers]);
+  }, [user?.userId]);
 
   // Handle URL shareable room link: e.g. /call/:roomId or ?room=CONNECTCALL-...
   useEffect(() => {
+    if (handledRoomRef.current || !user || activeCall) return;
+
     const params = new URLSearchParams(window.location.search);
     const roomFromQuery = params.get('room');
     const pathMatch = window.location.pathname.match(/\/call\/([A-Za-z0-9_-]+)/);
     const targetRoomId = roomFromQuery || (pathMatch ? pathMatch[1] : null);
 
-    if (targetRoomId && user && !activeCall) {
+    if (targetRoomId) {
       const demoTarget = allUsers.find((u) => u.userId !== user.userId) || demoUsers[1];
       if (demoTarget) {
+        handledRoomRef.current = true;
         startCall(demoTarget, 'video', targetRoomId);
       }
     }
-  }, [user, allUsers, demoUsers, activeCall, startCall]);
+  }, [user?.userId, allUsers, demoUsers, activeCall, startCall]);
 
   if (authLoading) {
     return (

@@ -14,37 +14,65 @@ export const useChat = (initialTargetUser?: UserProfile | null) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [replyingTo, setReplyingTo] = useState<MessageReplyInfo | null>(null);
 
+  const activeChatRef = useRef<Chat | null>(null);
+  activeChatRef.current = activeChat;
+
+  const activePartnerRef = useRef<UserProfile | null>(null);
+  activePartnerRef.current = activePartner;
+
+  const userRef = useRef<UserProfile | null>(null);
+  userRef.current = user;
+
   const typingTimeoutRef = useRef<number | null>(null);
 
-  // Subscribe to all chats for current user
+  // Subscribe to all chats for current user - ONLY depends on user ID
   useEffect(() => {
-    if (!user) return;
+    if (!user?.userId) {
+      setChats([]);
+      return;
+    }
+
     const unsub = ChatService.subscribeToUserChats(user.userId, (updatedChats) => {
       setChats(updatedChats);
 
-      // If activeChat is open, update its reference
-      if (activeChat) {
-        const found = updatedChats.find((c) => c.chatId === activeChat.chatId);
+      // If activeChat is open, update its reference safely without causing infinite loops
+      const currentActive = activeChatRef.current;
+      if (currentActive) {
+        const found = updatedChats.find((c) => c.chatId === currentActive.chatId);
         if (found) {
-          setActiveChat(found);
+          setActiveChat((prev) => {
+            if (!prev) return found;
+            // Only update state if meaningful properties actually changed
+            if (
+              prev.updatedAt !== found.updatedAt ||
+              prev.lastMessage?.timestamp !== found.lastMessage?.timestamp ||
+              prev.lastMessage?.text !== found.lastMessage?.text
+            ) {
+              return found;
+            }
+            return prev;
+          });
         }
       }
     });
 
     return () => unsub();
-  }, [user, activeChat]);
+  }, [user?.userId]);
 
-  // Subscribe to messages in current active chat
+  // Subscribe to messages in current active chat - ONLY depends on primitive IDs
+  const activeChatId = activeChat?.chatId;
+  const currentUserId = user?.userId;
+
   useEffect(() => {
-    if (!user || !activeChat) {
+    if (!currentUserId || !activeChatId) {
       setMessages([]);
       return;
     }
 
     setLoading(true);
     const unsub = ChatService.subscribeToMessages(
-      activeChat.chatId,
-      user.userId,
+      activeChatId,
+      currentUserId,
       (msgs) => {
         setMessages(msgs);
         setLoading(false);
@@ -55,39 +83,46 @@ export const useChat = (initialTargetUser?: UserProfile | null) => {
     );
 
     return () => unsub();
-  }, [user, activeChat?.chatId]);
+  }, [currentUserId, activeChatId]);
 
   // Select or initiate chat with a user
   const openChatWithUser = useCallback(async (target: UserProfile) => {
-    if (!user) return;
+    const currentUser = userRef.current;
+    if (!currentUser) return;
     setActivePartner(target);
-    const chat = await ChatService.getOrCreateChat(user, target);
+    const chat = await ChatService.getOrCreateChat(currentUser, target);
     setActiveChat(chat);
-  }, [user]);
+  }, []);
 
   // Send a message
   const sendMessage = useCallback(async (
     text: string,
     options?: { isSecret?: boolean; disappearingDuration?: number }
   ) => {
-    if (!user || !activeChat || !activePartner || !text.trim()) return;
+    const currentUser = userRef.current;
+    const currentChat = activeChatRef.current;
+    const currentPartner = activePartnerRef.current;
+
+    if (!currentUser || !currentChat || !currentPartner || !text.trim()) return;
 
     await ChatService.sendMessage(
-      activeChat.chatId,
-      user,
-      activePartner.userId,
+      currentChat.chatId,
+      currentUser,
+      currentPartner.userId,
       text,
       replyingTo || undefined,
       options
     );
     setReplyingTo(null);
-  }, [user, activeChat, activePartner, replyingTo]);
+  }, [replyingTo]);
 
   // Typing status update with debounce
   const handleTyping = useCallback((isTyping: boolean) => {
-    if (!user || !activeChat) return;
+    const currentUser = userRef.current;
+    const currentChat = activeChatRef.current;
+    if (!currentUser || !currentChat) return;
 
-    ChatService.setTyping(activeChat.chatId, user.userId, isTyping);
+    ChatService.setTyping(currentChat.chatId, currentUser.userId, isTyping);
 
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
@@ -95,16 +130,19 @@ export const useChat = (initialTargetUser?: UserProfile | null) => {
 
     if (isTyping) {
       typingTimeoutRef.current = window.setTimeout(() => {
-        ChatService.setTyping(activeChat.chatId, user.userId, false);
+        if (userRef.current && activeChatRef.current) {
+          ChatService.setTyping(activeChatRef.current.chatId, userRef.current.userId, false);
+        }
       }, 2500);
     }
-  }, [user, activeChat]);
+  }, []);
 
   // Delete message
   const deleteMessage = useCallback(async (messageId: string) => {
-    if (!activeChat) return;
-    await ChatService.deleteMessage(activeChat.chatId, messageId);
-  }, [activeChat]);
+    const currentChat = activeChatRef.current;
+    if (!currentChat) return;
+    await ChatService.deleteMessage(currentChat.chatId, messageId);
+  }, []);
 
   // Filter messages based on search query
   const filteredMessages = messages.filter((m) => {
