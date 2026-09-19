@@ -31,8 +31,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // If demo mode and no user is logged in, default to the first demo user (Sarah Connor) for instant exploration!
+    // If demo mode and user hasn't explicitly logged out
     if (!isFirebase) {
+      const isLoggedOut = localStorage.getItem('connectcall_logged_out') === 'true';
+      if (isLoggedOut) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
       const stored = localStorage.getItem('connectcall_current_demo_user');
       if (stored) {
         try {
@@ -92,6 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const profile = await AuthService.login(email, pass);
+      localStorage.removeItem('connectcall_logged_out');
       setUser(profile);
       return profile;
     } finally {
@@ -103,6 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const profile = await AuthService.register(name, email, pass, photoURL, about);
+      localStorage.removeItem('connectcall_logged_out');
       setUser(profile);
       refreshDemoUsers();
       return profile;
@@ -115,6 +124,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       await AuthService.logout(user?.userId);
+      localStorage.setItem('connectcall_logged_out', 'true');
+      localStorage.removeItem('connectcall_current_demo_user');
       setUser(null);
     } finally {
       setLoading(false);
@@ -137,6 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const profile = await AuthService.signInWithGoogle();
+      localStorage.removeItem('connectcall_logged_out');
       setUser(profile);
       return profile;
     } finally {
@@ -145,6 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const switchDemoUser = (newUser: UserProfile) => {
+    localStorage.removeItem('connectcall_logged_out');
     setUser(newUser);
     localStorage.setItem('connectcall_current_demo_user', JSON.stringify(newUser));
   };

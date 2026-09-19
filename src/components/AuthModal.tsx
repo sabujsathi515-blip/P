@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Phone, Mail, Lock, User, ArrowRight, Check, AlertCircle, Camera } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
+import { Phone, Mail, Lock, User, ArrowRight, Check, AlertCircle, Camera, ShieldCheck, Smartphone } from 'lucide-react';
 
 interface AuthViewProps {
   onSuccess?: () => void;
@@ -510,6 +511,16 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess, onClose }) => {
             </div>
           </form>
         )}
+
+        {/* Android App & Privacy Footer Banner */}
+        <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>সিক্রেট চ্যাট ও পিন ভল্ট এনক্রিপশন সক্রিয়</span>
+          </div>
+
+          <PWAInstallButton variant="compact" />
+        </div>
       </div>
     </div>
   );

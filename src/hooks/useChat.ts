@@ -66,7 +66,10 @@ export const useChat = (initialTargetUser?: UserProfile | null) => {
   }, [user]);
 
   // Send a message
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessage = useCallback(async (
+    text: string,
+    options?: { isSecret?: boolean; disappearingDuration?: number }
+  ) => {
     if (!user || !activeChat || !activePartner || !text.trim()) return;
 
     await ChatService.sendMessage(
@@ -74,7 +77,8 @@ export const useChat = (initialTargetUser?: UserProfile | null) => {
       user,
       activePartner.userId,
       text,
-      replyingTo || undefined
+      replyingTo || undefined,
+      options
     );
     setReplyingTo(null);
   }, [user, activeChat, activePartner, replyingTo]);

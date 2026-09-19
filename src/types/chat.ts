@@ -15,6 +15,10 @@ export interface Message {
   timestamp: number;
   status: MessageStatus;
   replyTo?: MessageReplyInfo;
+  isSecret?: boolean;
+  expiresAt?: number;
+  disappearingDuration?: number;
+  encrypted?: boolean;
 }
 
 export interface ChatParticipantInfo {
@@ -32,8 +36,11 @@ export interface Chat {
     timestamp: number;
     senderId: string;
     status: MessageStatus;
+    isSecret?: boolean;
   };
   unreadCount?: Record<string, number>;
   typingUsers?: Record<string, boolean>;
   updatedAt: number;
+  isSecretChat?: boolean;
+  disappearingTimer?: number;
 }

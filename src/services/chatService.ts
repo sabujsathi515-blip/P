@@ -141,9 +141,14 @@ export class ChatService {
     } else {
       // Demo mode
       const load = () => {
-        const msgs = getDemoMessages(chatId);
+        let msgs = getDemoMessages(chatId);
+        const now = Date.now();
+        // Clean up expired disappearing messages
+        const initialCount = msgs.length;
+        msgs = msgs.filter((m) => !m.expiresAt || m.expiresAt > now);
+        let changed = msgs.length !== initialCount;
+
         // Mark as seen
-        let changed = false;
         msgs.forEach((m) => {
           if (m.receiverId === currentUserId && m.status !== 'seen') {
             m.status = 'seen';
@@ -157,12 +162,15 @@ export class ChatService {
       };
 
       load();
+      // Setup a periodic check for self-destructing messages
+      const interval = setInterval(load, 3000);
       const eventName = `connectcall_messages_${chatId}`;
       const handler = () => load();
       window.addEventListener(eventName, handler);
       window.addEventListener('storage', handler);
 
       return () => {
+        clearInterval(interval);
         window.removeEventListener(eventName, handler);
         window.removeEventListener('storage', handler);
       };
@@ -223,10 +231,14 @@ export class ChatService {
     sender: UserProfile,
     receiverId: string,
     text: string,
-    replyTo?: MessageReplyInfo
+    replyTo?: MessageReplyInfo,
+    options?: { isSecret?: boolean; disappearingDuration?: number }
   ): Promise<Message> {
     const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
     const now = Date.now();
+    const expiresAt = options?.disappearingDuration
+      ? now + options.disappearingDuration * 1000
+      : undefined;
 
     const newMessage: Message = {
       messageId,
@@ -237,6 +249,10 @@ export class ChatService {
       timestamp: now,
       status: 'sent',
       replyTo,
+      isSecret: options?.isSecret || false,
+      expiresAt,
+      disappearingDuration: options?.disappearingDuration,
+      encrypted: true,
     };
 
     if (isFirebaseConfigured() && db) {

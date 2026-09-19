@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { PrivacyProvider, usePrivacy } from './contexts/PrivacyContext';
 import { CallProvider, useCall } from './contexts/CallContext';
 import { useChat } from './hooks/useChat';
 import { AuthService } from './services/authService';
@@ -20,6 +21,10 @@ import { AudioCallScreen } from './components/AudioCallScreen';
 import { VideoCallScreen } from './components/VideoCallScreen';
 import { ChatPanel } from './components/ChatPanel';
 import { SetupGuideModal } from './components/SetupGuideModal';
+import { ScreenLockOverlay } from './components/ScreenLockOverlay';
+import { CamouflageOverlay } from './components/CamouflageOverlay';
+import { AndroidAppDownloadModal } from './components/AndroidAppDownloadModal';
+import { PWAInstallButton } from './components/PWAInstallButton';
 
 import {
   MessageSquare,
@@ -34,13 +39,17 @@ import {
   X,
   ChevronDown,
   Sparkles,
+  Lock,
+  LogOut,
+  Smartphone,
 } from 'lucide-react';
 
 type NavTab = 'chats' | 'contacts' | 'calls' | 'profile' | 'settings';
 
 function MainAppContent() {
-  const { user, loading: authLoading, demoUsers, switchDemoUser, isFirebase } = useAuth();
+  const { user, loading: authLoading, demoUsers, switchDemoUser, isFirebase, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { lockApp } = usePrivacy();
   const {
     activeCall,
     callStatus,
@@ -72,6 +81,7 @@ function MainAppContent() {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [showDemoUserMenu, setShowDemoUserMenu] = useState(false);
+  const [showAndroidModal, setShowAndroidModal] = useState(false);
   const [mobileChatViewActive, setMobileChatViewActive] = useState(false);
 
   // Chat management hook
@@ -343,6 +353,26 @@ function MainAppContent() {
                 >
                   <SettingsIcon className="w-5 h-5" />
                 </button>
+
+                <div className="w-6 h-px bg-slate-200 dark:bg-slate-800 my-1" />
+
+                {/* Quick App Lock button */}
+                <button
+                  onClick={lockApp}
+                  title="স্ক্রিন লক করুন (গোপন চ্যাট সুরক্ষিত রাখুন)"
+                  className="relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all cursor-pointer text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                >
+                  <Lock className="w-5 h-5" />
+                </button>
+
+                {/* Android App Download button */}
+                <button
+                  onClick={() => setShowAndroidModal(true)}
+                  title="Android App ডাউনলোড ও ইনস্টল"
+                  className="relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all cursor-pointer text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                >
+                  <Smartphone className="w-5 h-5" />
+                </button>
               </div>
             </div>
 
@@ -428,7 +458,7 @@ function MainAppContent() {
                       ))}
                     </div>
 
-                    <div className="pt-1 border-t border-slate-100 dark:border-slate-700/60">
+                    <div className="pt-1 border-t border-slate-100 dark:border-slate-700/60 space-y-1">
                       <button
                         onClick={() => {
                           setActiveTab('profile');
@@ -437,6 +467,17 @@ function MainAppContent() {
                         className="w-full text-left px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-xl text-slate-700 dark:text-slate-200 cursor-pointer"
                       >
                         Account Settings
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowDemoUserMenu(false);
+                          logout();
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl flex items-center gap-1.5 cursor-pointer font-medium"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>লগইন পেজে যান / লগআউট</span>
                       </button>
                     </div>
                   </div>
@@ -512,6 +553,16 @@ function MainAppContent() {
           </main>
         </div>
       )}
+
+      {/* Privacy & Security Overlays */}
+      <ScreenLockOverlay />
+      <CamouflageOverlay />
+
+      {/* Android App Download Modal */}
+      <AndroidAppDownloadModal
+        isOpen={showAndroidModal}
+        onClose={() => setShowAndroidModal(false)}
+      />
     </div>
   );
 }
@@ -520,9 +571,11 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <CallProvider>
-          <MainAppContent />
-        </CallProvider>
+        <PrivacyProvider>
+          <CallProvider>
+            <MainAppContent />
+          </CallProvider>
+        </PrivacyProvider>
       </AuthProvider>
     </ThemeProvider>
   );
