@@ -19,6 +19,7 @@ export class WebRTCService {
   private cameraTrack: MediaStreamTrack | null = null;
   private callbacks: WebRTCCallbacks = {};
   private isScreenSharing: boolean = false;
+  private pendingCandidates: RTCIceCandidateInit[] = [];
 
   constructor(callbacks?: WebRTCCallbacks) {
     if (callbacks) {
@@ -38,6 +39,9 @@ export class WebRTCService {
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
     ];
 
     const turnUrl = import.meta.env.VITE_TURN_URL || localStorage.getItem('connectcall_turn_url');
@@ -198,6 +202,19 @@ export class WebRTCService {
     await pc.setRemoteDescription(new RTCSessionDescription(remoteOffer));
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
+
+    // Flush any early candidates
+    if (this.pendingCandidates.length > 0) {
+      for (const candidate of this.pendingCandidates) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+          console.warn('Error adding queued candidate in answer:', e);
+        }
+      }
+      this.pendingCandidates = [];
+    }
+
     return answer;
   }
 
@@ -208,6 +225,18 @@ export class WebRTCService {
     if (!this.pc) return;
     if (this.pc.signalingState === 'have-local-offer') {
       await this.pc.setRemoteDescription(new RTCSessionDescription(remoteAnswer));
+
+      // Flush any queued candidates
+      if (this.pendingCandidates.length > 0) {
+        for (const candidate of this.pendingCandidates) {
+          try {
+            await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (e) {
+            console.warn('Error adding queued candidate in handleAnswer:', e);
+          }
+        }
+        this.pendingCandidates = [];
+      }
     }
   }
 
@@ -217,13 +246,11 @@ export class WebRTCService {
   public async addIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
     if (!this.pc) return;
     try {
-      if (this.pc.remoteDescription) {
+      if (this.pc.remoteDescription && this.pc.remoteDescription.type) {
         await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
       } else {
         // Queue until remote description is set
-        setTimeout(() => {
-          this.pc?.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
-        }, 500);
+        this.pendingCandidates.push(candidate);
       }
     } catch (err) {
       console.warn('Error adding ICE candidate:', err);
@@ -383,5 +410,6 @@ export class WebRTCService {
     this.remoteStream = null;
     this.cameraTrack = null;
     this.isScreenSharing = false;
+    this.pendingCandidates = [];
   }
 }

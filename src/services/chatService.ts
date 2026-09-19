@@ -15,6 +15,7 @@ import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from '.
 import type { Chat, Message, MessageReplyInfo } from '../types/chat';
 import type { UserProfile } from '../types/user';
 import { soundService } from './soundService';
+import { realtimeHub } from './realtimeHub';
 
 const LOCAL_STORAGE_CHATS = 'connectcall_demo_chats';
 const LOCAL_STORAGE_MESSAGES = 'connectcall_demo_messages';
@@ -83,8 +84,20 @@ export class ChatService {
         }
       );
     } else {
-      // Demo mode
-      const load = () => {
+      let active = true;
+
+      const load = async () => {
+        if (!active) return;
+        try {
+          const res = await fetch(`/api/chats?userId=${encodeURIComponent(userId)}`);
+          if (res.ok) {
+            const data = await res.json();
+            onChats(data);
+            return;
+          }
+        } catch {
+          // fallback to localStorage
+        }
         const allChats = getDemoChats();
         const userChats = allChats.filter((c) => c.participants.includes(userId));
         userChats.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -92,11 +105,26 @@ export class ChatService {
       };
 
       load();
+
+      // Realtime listener for message / chat updates
+      const unsubMessage = realtimeHub.on('new_message', () => {
+        load();
+      });
+
+      const unsubChatUpdate = realtimeHub.on('chat_update', () => {
+        load();
+      });
+
+      const interval = setInterval(load, 3000);
       const handler = () => load();
       window.addEventListener('connectcall_demo_chats_updated', handler);
       window.addEventListener('storage', handler);
 
       return () => {
+        active = false;
+        clearInterval(interval);
+        unsubMessage();
+        unsubChatUpdate();
         window.removeEventListener('connectcall_demo_chats_updated', handler);
         window.removeEventListener('storage', handler);
       };
@@ -139,16 +167,40 @@ export class ChatService {
         }
       );
     } else {
-      // Demo mode
-      const load = () => {
+      let active = true;
+
+      const load = async () => {
+        if (!active) return;
+        try {
+          const res = await fetch(`/api/chats/${chatId}/messages`);
+          if (res.ok) {
+            let msgs: Message[] = await res.json();
+            const now = Date.now();
+            msgs = msgs.filter((m) => !m.expiresAt || m.expiresAt > now);
+
+            // Mark as seen on server
+            const hasUnseen = msgs.some((m) => m.receiverId === currentUserId && m.status !== 'seen');
+            if (hasUnseen) {
+              fetch(`/api/chats/${chatId}/seen`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: currentUserId }),
+              }).catch(() => {});
+            }
+
+            onMessages(msgs);
+            return;
+          }
+        } catch {
+          // fallback
+        }
+
         let msgs = getDemoMessages(chatId);
         const now = Date.now();
-        // Clean up expired disappearing messages
         const initialCount = msgs.length;
         msgs = msgs.filter((m) => !m.expiresAt || m.expiresAt > now);
         let changed = msgs.length !== initialCount;
 
-        // Mark as seen
         msgs.forEach((m) => {
           if (m.receiverId === currentUserId && m.status !== 'seen') {
             m.status = 'seen';
@@ -162,15 +214,39 @@ export class ChatService {
       };
 
       load();
-      // Setup a periodic check for self-destructing messages
-      const interval = setInterval(load, 3000);
+
+      // Realtime listener for incoming messages
+      const unsubNewMsg = realtimeHub.on('new_message', (payload: { chatId: string; message: Message }) => {
+        if (payload && payload.chatId === chatId) {
+          load();
+        }
+      });
+
+      const unsubDelMsg = realtimeHub.on('message_deleted', (payload: { chatId: string }) => {
+        if (payload && payload.chatId === chatId) {
+          load();
+        }
+      });
+
+      const unsubSeen = realtimeHub.on('messages_seen', (payload: { chatId: string }) => {
+        if (payload && payload.chatId === chatId) {
+          load();
+        }
+      });
+
+      // Periodic check every 2 seconds
+      const interval = setInterval(load, 2000);
       const eventName = `connectcall_messages_${chatId}`;
       const handler = () => load();
       window.addEventListener(eventName, handler);
       window.addEventListener('storage', handler);
 
       return () => {
+        active = false;
         clearInterval(interval);
+        unsubNewMsg();
+        unsubDelMsg();
+        unsubSeen();
         window.removeEventListener(eventName, handler);
         window.removeEventListener('storage', handler);
       };
@@ -214,6 +290,20 @@ export class ChatService {
         handleFirestoreError(err, OperationType.WRITE, `chats/${chatId}`);
       }
     } else {
+      try {
+        const res = await fetch('/api/chats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(chatData),
+        });
+        if (res.ok) {
+          const created = await res.json();
+          return created;
+        }
+      } catch (e) {
+        console.warn('API getOrCreateChat fallback', e);
+      }
+
       const allChats = getDemoChats();
       const existing = allChats.find((c) => c.chatId === chatId);
       if (existing) {
@@ -257,10 +347,8 @@ export class ChatService {
 
     if (isFirebaseConfigured() && db) {
       try {
-        // Save message document
         await setDoc(doc(db, 'messages', messageId), newMessage);
 
-        // Update parent chat document
         await updateDoc(doc(db, 'chats', chatId), {
           lastMessage: {
             text: newMessage.text,
@@ -269,7 +357,7 @@ export class ChatService {
             status: 'sent',
           },
           updatedAt: now,
-          [`unreadCount.${receiverId}`]: 1, // increment/set unread
+          [`unreadCount.${receiverId}`]: 1,
           [`typingUsers.${sender.userId}`]: false,
         });
 
@@ -279,12 +367,24 @@ export class ChatService {
         handleFirestoreError(err, OperationType.CREATE, `messages/${messageId}`);
       }
     } else {
-      // Demo mode
+      // POST to full-stack real-time API
+      try {
+        await fetch(`/api/chats/${chatId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newMessage),
+        });
+      } catch (e) {
+        console.warn('Failed to send message via API, falling back to local', e);
+      }
+
+      // Local storage & BroadcastChannel fallback
       const msgs = getDemoMessages(chatId);
       msgs.push(newMessage);
       saveDemoMessages(chatId, msgs);
 
-      // Update chats list
+      realtimeHub.broadcastLocally('new_message', { chatId, message: newMessage });
+
       const chats = getDemoChats();
       const chat = chats.find((c) => c.chatId === chatId);
       if (chat) {
@@ -316,9 +416,18 @@ export class ChatService {
         handleFirestoreError(err, OperationType.DELETE, `messages/${messageId}`);
       }
     } else {
+      try {
+        await fetch(`/api/chats/${chatId}/messages/${messageId}`, {
+          method: 'DELETE',
+        });
+      } catch (e) {
+        console.warn('Failed to delete message via API', e);
+      }
+
       const msgs = getDemoMessages(chatId);
       const filtered = msgs.filter((m) => m.messageId !== messageId);
       saveDemoMessages(chatId, filtered);
+      realtimeHub.broadcastLocally('message_deleted', { chatId, messageId });
     }
   }
 
@@ -331,6 +440,14 @@ export class ChatService {
         });
       } catch (_) {}
     } else {
+      try {
+        await fetch(`/api/chats/${chatId}/typing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, isTyping }),
+        });
+      } catch (_) {}
+
       const chats = getDemoChats();
       const chat = chats.find((c) => c.chatId === chatId);
       if (chat) {
@@ -338,6 +455,7 @@ export class ChatService {
         chat.typingUsers[userId] = isTyping;
         saveDemoChats(chats);
       }
+      realtimeHub.broadcastLocally('typing', { chatId, userId, isTyping });
     }
   }
 
@@ -367,7 +485,23 @@ export class ChatService {
       }
     }
 
-    // Demo users search
+    try {
+      const res = await fetch('/api/users');
+      if (res.ok) {
+        const serverUsers: UserProfile[] = await res.json();
+        return serverUsers
+          .filter((u) => u.userId !== currentUserId)
+          .filter(
+            (u) =>
+              !qLower ||
+              u.name.toLowerCase().includes(qLower) ||
+              u.email.toLowerCase().includes(qLower)
+          );
+      }
+    } catch {
+      // fallback
+    }
+
     const localUsers: UserProfile[] = JSON.parse(
       localStorage.getItem('connectcall_demo_users') || '[]'
     );

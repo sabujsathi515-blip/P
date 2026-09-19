@@ -373,8 +373,12 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Caller side: handle incoming SDP answer from receiver
       if (room.callerId === user.userId && room.answer && webrtcRef.current) {
+        if (unansweredTimerRef.current) {
+          clearTimeout(unansweredTimerRef.current);
+          unansweredTimerRef.current = null;
+        }
         await webrtcRef.current.handleAnswer(room.answer);
-        setCallStatus('connected');
+        setCallStatus((prev) => (prev !== 'connected' ? 'connected' : prev));
         soundService.stopAllSounds();
       }
 

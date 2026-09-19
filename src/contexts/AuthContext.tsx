@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { UserProfile } from '../types/user';
 import { AuthService, getLocalDemoUsers, DEMO_USERS } from '../services/authService';
 import { isFirebaseConfigured } from '../services/firebase';
+import { realtimeHub } from '../services/realtimeHub';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -71,9 +72,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsub();
   }, [isFirebase]);
 
-  // Online status heartbeat and visibility handler
+  // Online status heartbeat, visibility handler, and realtimeHub connection
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      realtimeHub.disconnect();
+      return;
+    }
+
+    realtimeHub.connect(user.userId);
+    AuthService.setUserOnlineStatus(user.userId, true).catch(() => {});
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {

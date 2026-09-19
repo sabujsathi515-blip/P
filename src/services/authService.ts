@@ -12,6 +12,7 @@ import {
 import { doc, setDoc, getDoc, updateDoc, collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured, handleFirestoreError, OperationType } from './firebase';
 import type { UserProfile } from '../types/user';
+import { realtimeHub } from './realtimeHub';
 
 // Demo pre-populated users for seamless instant testing if Firebase is in Demo Mode
 export const DEMO_USERS: UserProfile[] = [
@@ -69,7 +70,6 @@ export const getLocalDemoUsers = (): UserProfile[] => {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY_DEMO_USERS);
     if (raw) {
       const parsed: UserProfile[] = JSON.parse(raw);
-      // Ensure existing demo users have phone numbers populated
       let modified = false;
       const merged = parsed.map((u) => {
         const defaultMatch = DEMO_USERS.find((d) => d.userId === u.userId);
@@ -188,7 +188,6 @@ export class AuthService {
       await this.saveUserProfile(profile);
       return profile;
     } else {
-      // Demo Mode Registration
       const demoUsers = getLocalDemoUsers();
       const existing = demoUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
       if (existing) {
@@ -208,9 +207,21 @@ export class AuthService {
         createdAt: Date.now(),
       };
 
+      // Sync to shared backend server so all devices see this user!
+      try {
+        await fetch('/api/users/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newProfile),
+        });
+      } catch (e) {
+        console.warn('API sync error', e);
+      }
+
       demoUsers.push(newProfile);
       saveLocalDemoUsers(demoUsers);
       localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(newProfile));
+      realtimeHub.broadcastLocally('user_update', newProfile);
       return newProfile;
     }
   }
@@ -228,7 +239,6 @@ export class AuthService {
       throw new Error('অনুগ্রহ করে সঠিক ইমেইল আইডি লিখুন (যেমন: name@example.com)');
     }
 
-    // Check if user with this email already exists in Firestore
     if (isFirebaseConfigured() && db) {
       try {
         const usersRef = collection(db, 'users');
@@ -246,14 +256,26 @@ export class AuthService {
       }
     }
 
-    // Check if user already exists in demo storage
+    // Check server users first
+    try {
+      const res = await fetch('/api/users');
+      if (res.ok) {
+        const serverUsers: UserProfile[] = await res.json();
+        const found = serverUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+        if (found) {
+          return found;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
     const demoUsers = getLocalDemoUsers();
     const existing = demoUsers.find((u) => u.email.toLowerCase() === cleanEmail);
     if (existing) {
       return existing;
     }
 
-    // Generate fallback readable name from email username (e.g. "sabujsathi515" -> "Sabujsathi515")
     const usernamePart = cleanEmail.split('@')[0];
     const derivedName = usernamePart
       .replace(/[._-]/g, ' ')
@@ -280,9 +302,20 @@ export class AuthService {
     if (isFirebaseConfigured() && db) {
       await this.saveUserProfile(newContact);
     } else {
+      // Sync to shared backend server
+      try {
+        await fetch('/api/users/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newContact),
+        });
+      } catch (e) {
+        console.warn('API sync contact error', e);
+      }
+
       demoUsers.push(newContact);
       saveLocalDemoUsers(demoUsers);
-      // Trigger storage event so other tabs and subscribers update
+      realtimeHub.broadcastLocally('user_update', newContact);
       window.dispatchEvent(new Event('storage'));
     }
 
@@ -311,7 +344,29 @@ export class AuthService {
       }
       return profile;
     } else {
-      // Demo login: find matching user or sign into demo Sarah Connor
+      // Check server first
+      try {
+        const res = await fetch('/api/users');
+        if (res.ok) {
+          const serverUsers: UserProfile[] = await res.json();
+          const user = serverUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
+          if (user) {
+            user.online = true;
+            user.lastSeen = Date.now();
+            await fetch('/api/users/status', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: user.userId, online: true }),
+            }).catch(() => {});
+
+            localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(user));
+            return user;
+          }
+        }
+      } catch {
+        // fallback
+      }
+
       const demoUsers = getLocalDemoUsers();
       const user = demoUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
       if (!user) {
@@ -350,7 +405,6 @@ export class AuthService {
       }
       return profile;
     } else {
-      // Demo switch to Sarah Connor
       const demoUsers = getLocalDemoUsers();
       const user = demoUsers[0];
       localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(user));
@@ -363,7 +417,6 @@ export class AuthService {
     if (isFirebaseConfigured() && auth) {
       await sendPasswordResetEmail(auth, email);
     } else {
-      // Simulate successful reset email sent in demo
       await new Promise((r) => setTimeout(r, 600));
     }
   }
@@ -381,7 +434,7 @@ export class AuthService {
     }
   }
 
-  // Save profile to Firestore
+  // Save profile to Firestore and full-stack backend
   public static async saveUserProfile(profile: UserProfile): Promise<void> {
     if (isFirebaseConfigured() && db) {
       try {
@@ -390,6 +443,16 @@ export class AuthService {
         handleFirestoreError(err, OperationType.WRITE, `users/${profile.userId}`);
       }
     } else {
+      try {
+        await fetch('/api/users/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profile),
+        });
+      } catch (e) {
+        console.warn('API save profile error', e);
+      }
+
       const demoUsers = getLocalDemoUsers();
       const idx = demoUsers.findIndex((u) => u.userId === profile.userId);
       if (idx >= 0) {
@@ -399,6 +462,7 @@ export class AuthService {
       }
       saveLocalDemoUsers(demoUsers);
       localStorage.setItem(LOCAL_STORAGE_KEY_CURRENT_USER, JSON.stringify(profile));
+      realtimeHub.broadcastLocally('user_update', profile);
     }
   }
 
@@ -415,6 +479,17 @@ export class AuthService {
         handleFirestoreError(err, OperationType.GET, `users/${userId}`);
       }
     } else {
+      try {
+        const res = await fetch('/api/users');
+        if (res.ok) {
+          const serverUsers: UserProfile[] = await res.json();
+          const found = serverUsers.find((u) => u.userId === userId);
+          if (found) return found;
+        }
+      } catch {
+        // fallback
+      }
+
       const demoUsers = getLocalDemoUsers();
       return demoUsers.find((u) => u.userId === userId) || null;
     }
@@ -429,16 +504,26 @@ export class AuthService {
           lastSeen: Date.now(),
         });
       } catch (err) {
-        // Soft fail if document not yet created
         console.warn('Could not update online status:', err);
       }
     } else {
+      try {
+        await fetch('/api/users/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, online }),
+        });
+      } catch (e) {
+        // ignore
+      }
+
       const demoUsers = getLocalDemoUsers();
       const user = demoUsers.find((u) => u.userId === userId);
       if (user) {
         user.online = online;
         user.lastSeen = Date.now();
         saveLocalDemoUsers(demoUsers);
+        realtimeHub.broadcastLocally('user_update', user);
       }
     }
   }
@@ -455,12 +540,23 @@ export class AuthService {
         console.warn('Could not update inCall status:', err);
       }
     } else {
+      try {
+        await fetch('/api/users/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, inCall, activeCallRoomId: roomId }),
+        });
+      } catch (e) {
+        // ignore
+      }
+
       const demoUsers = getLocalDemoUsers();
       const user = demoUsers.find((u) => u.userId === userId);
       if (user) {
         user.inCall = inCall;
         user.activeCallRoomId = roomId;
         saveLocalDemoUsers(demoUsers);
+        realtimeHub.broadcastLocally('user_update', user);
       }
     }
   }
@@ -483,13 +579,40 @@ export class AuthService {
         }
       );
     } else {
-      const load = () => {
+      let active = true;
+
+      const load = async () => {
+        if (!active) return;
+        try {
+          const res = await fetch('/api/users');
+          if (res.ok) {
+            const serverUsers: UserProfile[] = await res.json();
+            if (Array.isArray(serverUsers) && serverUsers.length > 0) {
+              onUsers(serverUsers);
+              saveLocalDemoUsers(serverUsers);
+              return;
+            }
+          }
+        } catch {
+          // fallback
+        }
         onUsers(getLocalDemoUsers());
       };
+
       load();
+
+      const unsub = realtimeHub.on('user_update', () => {
+        load();
+      });
+
+      const interval = setInterval(load, 4000);
       const handler = () => load();
       window.addEventListener('storage', handler);
+
       return () => {
+        active = false;
+        clearInterval(interval);
+        unsub();
         window.removeEventListener('storage', handler);
       };
     }

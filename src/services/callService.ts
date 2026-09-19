@@ -15,6 +15,7 @@ import { db, isFirebaseConfigured, handleFirestoreError, OperationType } from '.
 import type { CallRoom, CallRecord, CallType, CallStatus, IceCandidateItem } from '../types/call';
 import type { UserProfile } from '../types/user';
 import { soundService } from './soundService';
+import { realtimeHub } from './realtimeHub';
 
 const LOCAL_STORAGE_CALL_ROOMS = 'connectcall_demo_call_rooms';
 const LOCAL_STORAGE_CALL_HISTORY = 'connectcall_demo_calls';
@@ -64,14 +65,28 @@ export class CallService {
         handleFirestoreError(err, OperationType.CREATE, `callRooms/${roomId}`);
       }
     } else {
-      // Demo Mode: store in localStorage and dispatch event for cross-tab communication
+      // Full-Stack Server & Cross-Device Signaling
+      try {
+        await fetch('/api/calls/initiate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(roomData),
+        });
+      } catch (e) {
+        console.warn('API call initiate error, fallback to local', e);
+      }
+
+      // Local storage & BroadcastChannel fallback
       const rooms: Record<string, CallRoom> = JSON.parse(
         localStorage.getItem(LOCAL_STORAGE_CALL_ROOMS) || '{}'
       );
       rooms[roomId] = roomData;
       localStorage.setItem(LOCAL_STORAGE_CALL_ROOMS, JSON.stringify(rooms));
+      realtimeHub.broadcastLocally('incoming_call', roomData);
+      realtimeHub.broadcastLocally('call_update', roomData);
       window.dispatchEvent(new CustomEvent('connectcall_demo_room_update', { detail: roomData }));
       window.dispatchEvent(new StorageEvent('storage', { key: LOCAL_STORAGE_CALL_ROOMS }));
+
       soundService.playOutgoingRing();
       return roomData;
     }
@@ -99,20 +114,47 @@ export class CallService {
         }
       );
     } else {
-      // Demo mode
-      const check = () => {
+      let active = true;
+
+      // 1. Fetch current room state from server
+      const fetchRoom = async () => {
+        if (!active) return;
+        try {
+          const res = await fetch(`/api/calls/room/${roomId}`);
+          if (res.ok) {
+            const data = await res.json();
+            onUpdate(data);
+            return;
+          }
+        } catch {
+          // fallback to localStorage
+        }
         const rooms: Record<string, CallRoom> = JSON.parse(
           localStorage.getItem(LOCAL_STORAGE_CALL_ROOMS) || '{}'
         );
         onUpdate(rooms[roomId] || null);
       };
 
-      check();
-      const handler = () => check();
+      fetchRoom();
+
+      // 2. Real-time updates via SSE & BroadcastChannel
+      const unsubRealtime = realtimeHub.on('call_update', (room: CallRoom) => {
+        if (room && room.roomId === roomId) {
+          onUpdate(room);
+        }
+      });
+
+      // 3. Fast polling fallback (every 1.5s) during active call setup
+      const interval = setInterval(fetchRoom, 1500);
+
+      const handler = () => fetchRoom();
       window.addEventListener('connectcall_demo_room_update', handler);
       window.addEventListener('storage', handler);
 
       return () => {
+        active = false;
+        clearInterval(interval);
+        unsubRealtime();
         window.removeEventListener('connectcall_demo_room_update', handler);
         window.removeEventListener('storage', handler);
       };
@@ -136,7 +178,6 @@ export class CallService {
         if (!snapshot.empty) {
           const docSnap = snapshot.docs[0];
           const room = docSnap.data() as CallRoom;
-          // Only trigger if created within the last 45 seconds (avoids stale ghost calls)
           if (Date.now() - room.createdAt < 45000) {
             onIncomingCall(room);
             return;
@@ -145,8 +186,23 @@ export class CallService {
         onIncomingCall(null);
       });
     } else {
-      // Demo mode cross-tab checking
-      const check = () => {
+      let active = true;
+
+      const checkIncoming = async () => {
+        if (!active) return;
+        try {
+          const res = await fetch(`/api/calls/incoming?userId=${encodeURIComponent(currentUserId)}`);
+          if (res.ok) {
+            const incoming = await res.json();
+            if (incoming && (incoming.status === 'calling' || incoming.status === 'ringing')) {
+              onIncomingCall(incoming);
+              return;
+            }
+          }
+        } catch {
+          // fallback
+        }
+
         const rooms: Record<string, CallRoom> = JSON.parse(
           localStorage.getItem(LOCAL_STORAGE_CALL_ROOMS) || '{}'
         );
@@ -159,12 +215,39 @@ export class CallService {
         onIncomingCall(incoming || null);
       };
 
-      check();
-      const handler = () => check();
+      checkIncoming();
+
+      // Realtime listener for incoming call push
+      const unsubIncoming = realtimeHub.on('incoming_call', (room: CallRoom) => {
+        if (
+          room &&
+          room.receiverId === currentUserId &&
+          (room.status === 'calling' || room.status === 'ringing')
+        ) {
+          onIncomingCall(room);
+        }
+      });
+
+      const unsubCallUpdate = realtimeHub.on('call_update', (room: CallRoom) => {
+        if (room && room.receiverId === currentUserId) {
+          if (['ended', 'declined', 'missed', 'busy', 'failed'].includes(room.status)) {
+            onIncomingCall(null);
+          }
+        }
+      });
+
+      // Periodic check every 2 seconds
+      const pollTimer = setInterval(checkIncoming, 2000);
+
+      const handler = () => checkIncoming();
       window.addEventListener('connectcall_demo_room_update', handler);
       window.addEventListener('storage', handler);
 
       return () => {
+        active = false;
+        clearInterval(pollTimer);
+        unsubIncoming();
+        unsubCallUpdate();
         window.removeEventListener('connectcall_demo_room_update', handler);
         window.removeEventListener('storage', handler);
       };
@@ -191,12 +274,23 @@ export class CallService {
         handleFirestoreError(err, OperationType.UPDATE, `callRooms/${roomId}`);
       }
     } else {
+      try {
+        await fetch(`/api/calls/room/${roomId}/answer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answer }),
+        });
+      } catch (err) {
+        console.warn('Failed to answer call via API', err);
+      }
+
       const rooms: Record<string, CallRoom> = JSON.parse(
         localStorage.getItem(LOCAL_STORAGE_CALL_ROOMS) || '{}'
       );
       if (rooms[roomId]) {
         rooms[roomId] = { ...rooms[roomId], ...patch };
         localStorage.setItem(LOCAL_STORAGE_CALL_ROOMS, JSON.stringify(rooms));
+        realtimeHub.broadcastLocally('call_update', rooms[roomId]);
         window.dispatchEvent(new CustomEvent('connectcall_demo_room_update', { detail: rooms[roomId] }));
         window.dispatchEvent(new StorageEvent('storage', { key: LOCAL_STORAGE_CALL_ROOMS }));
       }
@@ -227,6 +321,16 @@ export class CallService {
         console.warn('Failed to add candidate to Firestore', err);
       }
     } else {
+      try {
+        await fetch(`/api/calls/room/${roomId}/candidate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ candidate: item, isCaller }),
+        });
+      } catch (e) {
+        console.warn('Failed to post candidate to API', e);
+      }
+
       const rooms: Record<string, CallRoom> = JSON.parse(
         localStorage.getItem(LOCAL_STORAGE_CALL_ROOMS) || '{}'
       );
@@ -235,6 +339,7 @@ export class CallService {
         rooms[roomId][key] = rooms[roomId][key] || [];
         rooms[roomId][key]!.push(item);
         localStorage.setItem(LOCAL_STORAGE_CALL_ROOMS, JSON.stringify(rooms));
+        realtimeHub.broadcastLocally('call_update', rooms[roomId]);
         window.dispatchEvent(new CustomEvent('connectcall_demo_room_update', { detail: rooms[roomId] }));
         window.dispatchEvent(new StorageEvent('storage', { key: LOCAL_STORAGE_CALL_ROOMS }));
       }
@@ -261,12 +366,23 @@ export class CallService {
         console.warn('Failed to update call status:', err);
       }
     } else {
+      try {
+        await fetch(`/api/calls/room/${roomId}/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status, duration }),
+        });
+      } catch (e) {
+        console.warn('Failed to update call status via API', e);
+      }
+
       const rooms: Record<string, CallRoom> = JSON.parse(
         localStorage.getItem(LOCAL_STORAGE_CALL_ROOMS) || '{}'
       );
       if (rooms[roomId]) {
         rooms[roomId] = { ...rooms[roomId], ...patch };
         localStorage.setItem(LOCAL_STORAGE_CALL_ROOMS, JSON.stringify(rooms));
+        realtimeHub.broadcastLocally('call_update', rooms[roomId]);
         window.dispatchEvent(new CustomEvent('connectcall_demo_room_update', { detail: rooms[roomId] }));
         window.dispatchEvent(new StorageEvent('storage', { key: LOCAL_STORAGE_CALL_ROOMS }));
       }
@@ -294,11 +410,22 @@ export class CallService {
         handleFirestoreError(err, OperationType.CREATE, `calls/${callId}`);
       }
     } else {
+      try {
+        await fetch('/api/calls/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fullRecord),
+        });
+      } catch (e) {
+        console.warn('Failed to record call history via API', e);
+      }
+
       const history: CallRecord[] = JSON.parse(
         localStorage.getItem(LOCAL_STORAGE_CALL_HISTORY) || '[]'
       );
       history.unshift(fullRecord);
       localStorage.setItem(LOCAL_STORAGE_CALL_HISTORY, JSON.stringify(history));
+      realtimeHub.broadcastLocally('call_history_updated', fullRecord);
       window.dispatchEvent(new CustomEvent('connectcall_demo_calls_updated'));
       return fullRecord;
     }
@@ -311,7 +438,6 @@ export class CallService {
     onError?: (err: Error) => void
   ): () => void {
     if (isFirebaseConfigured() && db) {
-      // Query where callerId or receiverId is userId
       const q = query(
         collection(db, 'calls'),
         where('callerId', '==', userId),
@@ -326,7 +452,6 @@ export class CallService {
         limit(50)
       );
 
-      // Merge snapshots
       let callerCalls: CallRecord[] = [];
       let receiverCalls: CallRecord[] = [];
 
@@ -363,7 +488,21 @@ export class CallService {
         unsub2();
       };
     } else {
-      const load = () => {
+      let active = true;
+
+      const load = async () => {
+        if (!active) return;
+        try {
+          const res = await fetch(`/api/calls/history?userId=${encodeURIComponent(userId)}`);
+          if (res.ok) {
+            const data = await res.json();
+            onHistory(data);
+            return;
+          }
+        } catch {
+          // fallback
+        }
+
         const history: CallRecord[] = JSON.parse(
           localStorage.getItem(LOCAL_STORAGE_CALL_HISTORY) || '[]'
         );
@@ -375,11 +514,20 @@ export class CallService {
       };
 
       load();
+
+      const unsub = realtimeHub.on('call_history_updated', () => {
+        load();
+      });
+
+      const interval = setInterval(load, 5000);
       const handler = () => load();
       window.addEventListener('connectcall_demo_calls_updated', handler);
       window.addEventListener('storage', handler);
 
       return () => {
+        active = false;
+        clearInterval(interval);
+        unsub();
         window.removeEventListener('connectcall_demo_calls_updated', handler);
         window.removeEventListener('storage', handler);
       };
@@ -399,6 +547,14 @@ export class CallService {
         handleFirestoreError(err, OperationType.GET, `callRooms/${roomId}`);
       }
     } else {
+      try {
+        const res = await fetch(`/api/calls/room/${roomId}`);
+        if (res.ok) {
+          return await res.json();
+        }
+      } catch {
+        // fallback
+      }
       const rooms: Record<string, CallRoom> = JSON.parse(
         localStorage.getItem(LOCAL_STORAGE_CALL_ROOMS) || '{}'
       );
