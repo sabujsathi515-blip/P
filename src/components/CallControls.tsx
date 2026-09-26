@@ -12,6 +12,7 @@ import {
   MessageSquare,
   PhoneOff,
   Share2,
+  RotateCcw,
   Check,
 } from 'lucide-react';
 
@@ -25,6 +26,7 @@ interface CallControlsProps {
   callLink: string;
   onToggleMute: () => void;
   onToggleCamera: () => void;
+  onFlipCamera?: () => void;
   onToggleScreenShare: () => void;
   onToggleSpeaker: () => void;
   onToggleChat: () => void;
@@ -41,6 +43,7 @@ export const CallControls: React.FC<CallControlsProps> = ({
   callLink,
   onToggleMute,
   onToggleCamera,
+  onFlipCamera,
   onToggleScreenShare,
   onToggleSpeaker,
   onToggleChat,
@@ -86,17 +89,30 @@ export const CallControls: React.FC<CallControlsProps> = ({
 
       {/* Camera On / Off (if Video call) */}
       {callType === 'video' && (
-        <button
-          onClick={onToggleCamera}
-          title={isCameraOff ? 'Turn Camera On' : 'Turn Camera Off'}
-          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
-            isCameraOff
-              ? 'bg-rose-600/90 text-white hover:bg-rose-500'
-              : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
-          }`}
-        >
-          {isCameraOff ? <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Video className="w-4 h-4 sm:w-5 sm:h-5" />}
-        </button>
+        <>
+          <button
+            onClick={onToggleCamera}
+            title={isCameraOff ? 'Turn Camera On' : 'Turn Camera Off'}
+            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+              isCameraOff
+                ? 'bg-rose-600/90 text-white hover:bg-rose-500'
+                : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+            }`}
+          >
+            {isCameraOff ? <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Video className="w-4 h-4 sm:w-5 sm:h-5" />}
+          </button>
+
+          {/* Flip Front / Back Camera (Mobile) */}
+          {onFlipCamera && !isCameraOff && (
+            <button
+              onClick={onFlipCamera}
+              title="Flip Camera (Front / Rear)"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all cursor-pointer shrink-0 bg-slate-800 text-slate-100 hover:bg-slate-700 active:scale-95"
+            >
+              <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+          )}
+        </>
       )}
 
       {/* Screen Share (video call only) */}

@@ -52,9 +52,10 @@ export class NotificationService {
 
   public static notifyIncomingCall(callerName: string, type: 'audio' | 'video') {
     this.show(`Incoming ${type === 'video' ? 'Video' : 'Audio'} Call`, {
-      body: `${callerName} is calling you on ConnectCall...`,
+      body: `${callerName} is calling you on ConnectCall... Click to answer.`,
       tag: 'call-notif',
       requireInteraction: true,
+      silent: false,
     });
   }
 

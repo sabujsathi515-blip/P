@@ -10,18 +10,24 @@ import {
   PhoneMissed,
   Clock,
   RotateCcw,
+  Smartphone,
+  PhoneCall,
 } from 'lucide-react';
 
 interface CallHistoryProps {
   currentUserId: string;
   allUsers: UserProfile[];
   onCallUser: (user: UserProfile, type: CallType) => void;
+  onOpenCallAnotherMobile?: () => void;
+  onOpenDialPad?: () => void;
 }
 
 export const CallHistory: React.FC<CallHistoryProps> = ({
   currentUserId,
   allUsers,
   onCallUser,
+  onOpenCallAnotherMobile,
+  onOpenDialPad,
 }) => {
   const [calls, setCalls] = useState<CallRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,12 +72,36 @@ export const CallHistory: React.FC<CallHistoryProps> = ({
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900">
       {/* Header */}
-      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">Call History</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Recent incoming, outgoing, and missed calls
           </p>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {onOpenDialPad && (
+            <button
+              onClick={onOpenDialPad}
+              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+              title="Open Dial Pad"
+            >
+              <PhoneCall className="w-3.5 h-3.5 text-emerald-500" />
+              <span>ডায়াল প্যাড</span>
+            </button>
+          )}
+
+          {onOpenCallAnotherMobile && (
+            <button
+              onClick={onOpenCallAnotherMobile}
+              className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all active:scale-95 animate-pulse"
+              title="Call another mobile"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>২য় মোবাইলে কল দিন</span>
+            </button>
+          )}
         </div>
       </div>
 

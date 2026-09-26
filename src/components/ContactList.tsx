@@ -18,6 +18,8 @@ import {
   AtSign,
   User,
   Sparkles,
+  Smartphone,
+  PhoneCall,
 } from 'lucide-react';
 
 interface ContactListProps {
@@ -26,6 +28,8 @@ interface ContactListProps {
   onMessageClick: (contact: UserProfile) => void;
   onAudioCallClick: (contact: UserProfile) => void;
   onVideoCallClick: (contact: UserProfile) => void;
+  onOpenCallAnotherMobile?: () => void;
+  onOpenDialPad?: () => void;
 }
 
 export const ContactList: React.FC<ContactListProps> = ({
@@ -34,6 +38,8 @@ export const ContactList: React.FC<ContactListProps> = ({
   onMessageClick,
   onAudioCallClick,
   onVideoCallClick,
+  onOpenCallAnotherMobile,
+  onOpenDialPad,
 }) => {
   const { addNewContact } = useAuth();
 
@@ -167,20 +173,43 @@ export const ContactList: React.FC<ContactListProps> = ({
           </p>
         </div>
 
-        {/* Add Contact by Email Button */}
-        <button
-          onClick={() => {
-            setErrorMessage('');
-            setEmailInput('');
-            setNameInput('');
-            setAboutInput('');
-            setShowAddModal(true);
-          }}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-xl shadow-xs transition-all cursor-pointer hover:shadow-sky-500/20 active:scale-95"
-        >
-          <Mail className="w-3.5 h-3.5" />
-          <span>+ ইমেইল দিয়ে যোগ করুন</span>
-        </button>
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          {onOpenDialPad && (
+            <button
+              onClick={onOpenDialPad}
+              className="p-2 text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+              title="ডায়াল প্যাড খুলুন"
+            >
+              <PhoneCall className="w-3.5 h-3.5 text-emerald-500" />
+            </button>
+          )}
+
+          {onOpenCallAnotherMobile && (
+            <button
+              onClick={onOpenCallAnotherMobile}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 rounded-xl shadow-xs transition-all cursor-pointer active:scale-95 animate-pulse"
+              title="অন্য মোবাইলে কল দিন"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">২য় মোবাইলে কল</span>
+            </button>
+          )}
+
+          {/* Add Contact by Email Button */}
+          <button
+            onClick={() => {
+              setErrorMessage('');
+              setEmailInput('');
+              setNameInput('');
+              setAboutInput('');
+              setShowAddModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-xl shadow-xs transition-all cursor-pointer hover:shadow-sky-500/20 active:scale-95"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            <span>+ নতুন কন্টাক্ট</span>
+          </button>
+        </div>
       </div>
 
       {/* Success Notification Toast */}

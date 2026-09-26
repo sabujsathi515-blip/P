@@ -23,16 +23,37 @@ class SoundService {
     }
   }
 
-  // Incoming call ringtone (European/US dual-tone style, cycling cadence)
+  public unlockAudio() {
+    this.initContext();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+  }
+
+  // Incoming call ringtone (European/US dual-tone style, cycling cadence with mobile vibration)
   public playIncomingRing() {
     this.stopAllSounds();
-    this.initContext();
+    this.unlockAudio();
     if (!this.ctx) return;
 
     this.isRinging = true;
 
+    // Trigger mobile vibration pattern (vibrate, pause, vibrate...)
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([600, 300, 600, 300, 800]);
+      } catch (_) {}
+    }
+
     const playCadence = () => {
       if (!this.isRinging || !this.ctx) return;
+
+      // Repeat vibration each cadence cycle
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate([600, 300, 600, 300, 800]);
+        } catch (_) {}
+      }
 
       try {
         const osc1 = this.ctx.createOscillator();
@@ -46,8 +67,8 @@ class SoundService {
         osc2.frequency.setValueAtTime(480, this.ctx.currentTime);
 
         gain.gain.setValueAtTime(0, this.ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.18, this.ctx.currentTime + 0.05);
-        gain.gain.setValueAtTime(0.18, this.ctx.currentTime + 1.8);
+        gain.gain.linearRampToValueAtTime(0.24, this.ctx.currentTime + 0.05);
+        gain.gain.setValueAtTime(0.24, this.ctx.currentTime + 1.8);
         gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1.95);
 
         osc1.connect(gain);
@@ -64,7 +85,7 @@ class SoundService {
     };
 
     playCadence();
-    this.ringInterval = window.setInterval(playCadence, 4000);
+    this.ringInterval = window.setInterval(playCadence, 3800);
   }
 
   // Outgoing dial tone (standard soft pulsing tone)
@@ -236,6 +257,11 @@ class SoundService {
 
   public stopAllSounds() {
     this.isRinging = false;
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(0);
+      } catch (_) {}
+    }
     if (this.ringInterval) {
       clearInterval(this.ringInterval);
       this.ringInterval = null;
@@ -252,3 +278,16 @@ class SoundService {
 }
 
 export const soundService = new SoundService();
+
+// Auto-unlock Web Audio API context upon first user tap or click on mobile/desktop
+if (typeof window !== 'undefined') {
+  const autoUnlock = () => {
+    soundService.unlockAudio();
+    window.removeEventListener('click', autoUnlock);
+    window.removeEventListener('touchstart', autoUnlock);
+    window.removeEventListener('keydown', autoUnlock);
+  };
+  window.addEventListener('click', autoUnlock, { passive: true });
+  window.addEventListener('touchstart', autoUnlock, { passive: true });
+  window.addEventListener('keydown', autoUnlock, { passive: true });
+}

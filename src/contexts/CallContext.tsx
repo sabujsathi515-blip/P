@@ -30,6 +30,7 @@ interface CallContextType {
   endCurrentCall: () => Promise<void>;
   toggleMute: () => void;
   toggleCamera: () => void;
+  flipCamera: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
   toggleSpeaker: () => void;
   setChatDrawerOpen: (open: boolean) => void;
@@ -433,6 +434,19 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsCameraOff(!newState);
   };
 
+  // Controls: Mobile Front / Rear Camera Flip
+  const flipCamera = async () => {
+    if (!webrtcRef.current) return;
+    try {
+      const newTrack = await webrtcRef.current.switchCameraFacing();
+      if (newTrack && localStream) {
+        setLocalStream(new MediaStream(localStream.getTracks()));
+      }
+    } catch (err) {
+      console.warn('Flip camera error:', err);
+    }
+  };
+
   // Controls: Screen Share
   const toggleScreenShare = async () => {
     if (!webrtcRef.current) return;
@@ -488,6 +502,7 @@ export const CallProvider: React.FC<{ children: React.ReactNode }> = ({ children
         endCurrentCall,
         toggleMute,
         toggleCamera,
+        flipCamera,
         toggleScreenShare,
         toggleSpeaker,
         setChatDrawerOpen,

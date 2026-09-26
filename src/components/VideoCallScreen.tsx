@@ -18,6 +18,7 @@ interface VideoCallScreenProps {
   currentUserName: string;
   onToggleMute: () => void;
   onToggleCamera: () => void;
+  onFlipCamera?: () => void;
   onToggleScreenShare: () => void;
   onToggleSpeaker: () => void;
   onToggleChat: () => void;
@@ -39,6 +40,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   currentUserName,
   onToggleMute,
   onToggleCamera,
+  onFlipCamera,
   onToggleScreenShare,
   onToggleSpeaker,
   onToggleChat,
@@ -186,6 +188,7 @@ export const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           callLink={callLink}
           onToggleMute={onToggleMute}
           onToggleCamera={onToggleCamera}
+          onFlipCamera={onFlipCamera}
           onToggleScreenShare={onToggleScreenShare}
           onToggleSpeaker={onToggleSpeaker}
           onToggleChat={onToggleChat}

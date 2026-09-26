@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { isFirebaseConfigured } from '../services/firebase';
-import { X, Copy, Check, ExternalLink, ShieldCheck, Database, Key } from 'lucide-react';
+import { isFirebaseConfigured, firebaseConfig } from '../services/firebase';
+import { X, Copy, Check, ExternalLink, ShieldCheck, Database, Key, Upload, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface SetupGuideModalProps {
   isOpen: boolean;
@@ -9,9 +9,66 @@ interface SetupGuideModalProps {
 
 export const SetupGuideModal: React.FC<SetupGuideModalProps> = ({ isOpen, onClose }) => {
   const [copied, setCopied] = useState(false);
+  const [jsonInput, setJsonInput] = useState('');
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const isConfigured = isFirebaseConfigured();
 
   if (!isOpen) return null;
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (text) {
+        parseAndApplyJson(text);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const parseAndApplyJson = (rawText: string) => {
+    setImportError(null);
+    setImportStatus(null);
+    try {
+      const data = JSON.parse(rawText);
+      const projectId = data.project_info?.project_id || data.projectId;
+      const senderId = data.project_info?.project_number || data.messagingSenderId;
+      const storageBucket = data.project_info?.storage_bucket || data.storageBucket || `${projectId}.appspot.com`;
+      const apiKey = data.client?.[0]?.api_key?.[0]?.current_key || data.apiKey;
+      const appId = data.client?.[0]?.client_info?.mobilesdk_app_id || data.appId;
+      const authDomain = `${projectId}.firebaseapp.com`;
+
+      if (!projectId || !apiKey) {
+        throw new Error('Valid project_id and api_key not found in the JSON file.');
+      }
+
+      const extracted = {
+        apiKey,
+        authDomain,
+        projectId,
+        storageBucket,
+        messagingSenderId: String(senderId || ''),
+        appId: appId || '',
+      };
+
+      localStorage.setItem('connectcall_firebase_config', JSON.stringify(extracted));
+      setImportStatus(`সফলভাবে কানেক্ট হয়েছে! Project ID: ${projectId}. পেজ রিলোড হচ্ছে...`);
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Invalid JSON file.');
+    }
+  };
+
+  const handleClearCustomConfig = () => {
+    localStorage.removeItem('connectcall_firebase_config');
+    window.location.reload();
+  };
 
   const envTemplate = `# Firebase Web Configuration
 VITE_FIREBASE_API_KEY=AIzaSy...
@@ -62,6 +119,78 @@ VITE_FIREBASE_APP_ID=1:1234567890:web:...
 
         {/* Content */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-4 text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+          {/* Active Config Status or 1-Click Upload */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-sky-500/10 to-indigo-500/10 border border-emerald-500/30">
+            <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-100 mb-2">
+              <Upload className="w-4 h-4 text-emerald-500" />
+              <span>১-ক্লিকে google-services.json ফাইল আপলোড করুন:</span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+              আপনার Firebase থেকে ডাউনলোড করা <code className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono">google-services.json</code> ফাইলটি সরাসরি এখানে আপলোড করুন। অ্যাপ নিজে থেকেই সব কনফিগারেশন সেট করে নেবে।
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2">
+              <label className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-all active:scale-95">
+                <FileText className="w-4 h-4" />
+                <span>Upload google-services.json</span>
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+
+              {isConfigured && (
+                <button
+                  onClick={handleClearCustomConfig}
+                  className="text-xs text-rose-500 hover:underline px-3 py-1 cursor-pointer"
+                >
+                  Reset / Clear Config
+                </button>
+              )}
+            </div>
+
+            {/* Paste JSON directly */}
+            <div className="mt-3">
+              <details className="text-xs text-slate-500">
+                <summary className="cursor-pointer font-medium hover:text-slate-700 dark:hover:text-slate-300">
+                  অথবা JSON টেক্সট পেস্ট করুন (Click to paste raw JSON)
+                </summary>
+                <div className="mt-2 space-y-2">
+                  <textarea
+                    rows={4}
+                    value={jsonInput}
+                    onChange={(e) => setJsonInput(e.target.value)}
+                    placeholder='{"project_info": {"project_id": "my-app", ...}}'
+                    className="w-full p-2 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] border border-slate-700 focus:outline-hidden"
+                  />
+                  <button
+                    onClick={() => parseAndApplyJson(jsonInput)}
+                    disabled={!jsonInput.trim()}
+                    className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white rounded-lg text-xs font-semibold cursor-pointer"
+                  >
+                    Apply Config
+                  </button>
+                </div>
+              </details>
+            </div>
+
+            {importStatus && (
+              <div className="mt-3 p-2.5 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>{importStatus}</span>
+              </div>
+            )}
+
+            {importError && (
+              <div className="mt-3 p-2.5 bg-rose-500/20 border border-rose-500/40 rounded-xl text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2 font-medium">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                <span>{importError}</span>
+              </div>
+            )}
+          </div>
+
           <div className="p-3.5 rounded-2xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-200">
             <div className="flex items-center gap-2 font-bold mb-1">
               <ShieldCheck className="w-4 h-4 text-sky-500" />

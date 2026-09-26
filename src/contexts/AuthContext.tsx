@@ -35,6 +35,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // If demo mode and user hasn't explicitly logged out
     if (!isFirebase) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const userParam = urlParams.get('user')?.toLowerCase() || urlParams.get('userId');
+      const deviceParam = urlParams.get('device');
+
+      const currentDemoList = getLocalDemoUsers();
+
+      if (userParam || deviceParam) {
+        let matched: UserProfile | undefined;
+        if (userParam) {
+          if (userParam.includes('alex') || userParam === 'demo-user-2' || userParam === '2') {
+            matched = currentDemoList[1] || DEMO_USERS[1];
+          } else if (userParam.includes('david') || userParam === 'demo-user-3' || userParam === '3') {
+            matched = currentDemoList[2] || DEMO_USERS[2];
+          } else if (userParam.includes('elena') || userParam === 'demo-user-4' || userParam === '4') {
+            matched = currentDemoList[3] || DEMO_USERS[3];
+          } else if (userParam.includes('sarah') || userParam === 'demo-user-1' || userParam === '1') {
+            matched = currentDemoList[0] || DEMO_USERS[0];
+          } else {
+            matched = currentDemoList.find(
+              (u) => u.userId === userParam || u.email.toLowerCase().includes(userParam)
+            );
+          }
+        }
+        if (!matched && deviceParam === '2') {
+          matched = currentDemoList[1] || DEMO_USERS[1];
+        }
+
+        if (matched) {
+          localStorage.removeItem('connectcall_logged_out');
+          localStorage.setItem('connectcall_current_demo_user', JSON.stringify(matched));
+          setUser(matched);
+          setLoading(false);
+          return;
+        }
+      }
+
       const isLoggedOut = localStorage.getItem('connectcall_logged_out') === 'true';
       if (isLoggedOut) {
         setUser(null);
@@ -174,6 +210,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('connectcall_logged_out');
     setUser(newUser);
     localStorage.setItem('connectcall_current_demo_user', JSON.stringify(newUser));
+    realtimeHub.connect(newUser.userId);
+    AuthService.setUserOnlineStatus(newUser.userId, true).catch(() => {});
   };
 
   return (

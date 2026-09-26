@@ -25,6 +25,10 @@ import { ScreenLockOverlay } from './components/ScreenLockOverlay';
 import { CamouflageOverlay } from './components/CamouflageOverlay';
 import { AndroidAppDownloadModal } from './components/AndroidAppDownloadModal';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { CallAnotherMobileModal } from './components/CallAnotherMobileModal';
+import { DialPadModal } from './components/DialPadModal';
+import { NotificationService } from './services/notificationService';
+import { soundService } from './services/soundService';
 
 import {
   MessageSquare,
@@ -42,6 +46,10 @@ import {
   Lock,
   LogOut,
   Smartphone,
+  PhoneCall,
+  QrCode,
+  Bell,
+  Volume2,
 } from 'lucide-react';
 
 type NavTab = 'chats' | 'contacts' | 'calls' | 'profile' | 'settings';
@@ -71,6 +79,7 @@ function MainAppContent() {
     endCurrentCall,
     toggleMute,
     toggleCamera,
+    flipCamera,
     toggleScreenShare,
     toggleSpeaker,
     setChatDrawerOpen,
@@ -82,6 +91,9 @@ function MainAppContent() {
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [showDemoUserMenu, setShowDemoUserMenu] = useState(false);
   const [showAndroidModal, setShowAndroidModal] = useState(false);
+  const [showCallAnotherMobileModal, setShowCallAnotherMobileModal] = useState(false);
+  const [showDialPadModal, setShowDialPadModal] = useState(false);
+  const [dismissedNotifBanner, setDismissedNotifBanner] = useState(false);
   const [mobileChatViewActive, setMobileChatViewActive] = useState(false);
 
   // Chat management hook
@@ -123,23 +135,39 @@ function MainAppContent() {
     return () => unsub();
   }, [user?.userId]);
 
-  // Handle URL shareable room link: e.g. /call/:roomId or ?room=CONNECTCALL-...
+  // Handle URL shareable room link: e.g. /call/:roomId or ?room=CONNECTCALL-... or ?joinRoom=...
   useEffect(() => {
     if (handledRoomRef.current || !user || activeCall) return;
 
     const params = new URLSearchParams(window.location.search);
-    const roomFromQuery = params.get('room');
+    const roomFromQuery = params.get('room') || params.get('joinRoom');
     const pathMatch = window.location.pathname.match(/\/call\/([A-Za-z0-9_-]+)/);
     const targetRoomId = roomFromQuery || (pathMatch ? pathMatch[1] : null);
 
     if (targetRoomId) {
-      const demoTarget = allUsers.find((u) => u.userId !== user.userId) || demoUsers[1];
-      if (demoTarget) {
-        handledRoomRef.current = true;
-        startCall(demoTarget, 'video', targetRoomId);
-      }
+      handledRoomRef.current = true;
+      // Fetch room from server
+      fetch(`/api/calls/room/${encodeURIComponent(targetRoomId)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((roomData) => {
+          if (roomData && (roomData.status === 'calling' || roomData.status === 'ringing') && roomData.offer) {
+            // Room is actively calling this device!
+            acceptIncomingCall();
+          } else {
+            const demoTarget = allUsers.find((u) => u.userId !== user.userId) || demoUsers[1];
+            if (demoTarget) {
+              startCall(demoTarget, 'video', targetRoomId);
+            }
+          }
+        })
+        .catch(() => {
+          const demoTarget = allUsers.find((u) => u.userId !== user.userId) || demoUsers[1];
+          if (demoTarget) {
+            startCall(demoTarget, 'video', targetRoomId);
+          }
+        });
     }
-  }, [user?.userId, allUsers, demoUsers, activeCall, startCall]);
+  }, [user?.userId, allUsers, demoUsers, activeCall, startCall, acceptIncomingCall]);
 
   if (authLoading) {
     return (
@@ -217,6 +245,7 @@ function MainAppContent() {
                 currentUserName={user.name}
                 onToggleMute={toggleMute}
                 onToggleCamera={toggleCamera}
+                onFlipCamera={flipCamera}
                 onToggleScreenShare={toggleScreenShare}
                 onToggleSpeaker={toggleSpeaker}
                 onToggleChat={() => setChatDrawerOpen(!isChatDrawerOpen)}
@@ -293,29 +322,40 @@ function MainAppContent() {
 
               {/* Mobile Header Quick Actions */}
               <div className="flex items-center gap-1">
+                {/* Call Another Mobile / 2nd Phone Button */}
+                <button
+                  onClick={() => setShowCallAnotherMobileModal(true)}
+                  title="অন্য মোবাইলে কল দিন / Call Another Mobile"
+                  className="px-2 py-1 bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 animate-pulse"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">অন্য মোবাইলে কল</span>
+                  <span className="sm:hidden">২য় ফোনে কল</span>
+                </button>
+
+                {/* Dial Pad Button */}
+                <button
+                  onClick={() => setShowDialPadModal(true)}
+                  title="ডায়াল প্যাড"
+                  className="p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl transition-colors cursor-pointer"
+                >
+                  <PhoneCall className="w-4 h-4" />
+                </button>
+
                 {/* Privacy Lock */}
                 <button
                   onClick={lockApp}
                   title="স্ক্রিন লক"
-                  className="p-2 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-xl transition-colors cursor-pointer"
+                  className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-xl transition-colors cursor-pointer"
                 >
                   <Lock className="w-4 h-4" />
-                </button>
-
-                {/* Theme Toggle */}
-                <button
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                  title="Theme"
-                  className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
-                >
-                  {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </button>
 
                 {/* Android App Download Modal */}
                 <button
                   onClick={() => setShowAndroidModal(true)}
                   title="Android App"
-                  className="p-2 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl transition-colors cursor-pointer"
+                  className="p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
                 >
                   <Smartphone className="w-4 h-4" />
                 </button>
@@ -324,7 +364,7 @@ function MainAppContent() {
                 <button
                   onClick={() => setShowSetupModal(true)}
                   title={isFirebase ? 'Firebase Connected' : 'Setup Guide'}
-                  className="p-2 text-slate-500 hover:text-sky-500 rounded-xl transition-colors cursor-pointer"
+                  className="p-1.5 text-slate-500 hover:text-sky-500 rounded-xl transition-colors cursor-pointer"
                 >
                   {isFirebase ? (
                     <Sparkles className="w-4 h-4 text-emerald-500" />
@@ -417,6 +457,39 @@ function MainAppContent() {
                 </div>
               </div>
             </header>
+          )}
+
+          {/* Notification Permission Reminder Banner for Mobile Incoming Calls */}
+          {typeof Notification !== 'undefined' && Notification.permission === 'default' && !dismissedNotifBanner && (
+            <div className="bg-gradient-to-r from-emerald-600 via-sky-600 to-indigo-600 text-white text-xs px-3.5 py-2 flex items-center justify-between shrink-0 shadow-xs z-10 select-none">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 animate-bounce shrink-0 text-amber-300" />
+                <span className="font-medium text-[11px] sm:text-xs">
+                  অন্য ফোন থেকে কল আসার নোটিফিকেশন পেতে চান? (Enable Call Alerts)
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    soundService.unlockAudio();
+                    const res = await NotificationService.requestPermission();
+                    if (res === 'granted') {
+                      NotificationService.notifyIncomingCall('ConnectCall', 'audio');
+                    }
+                    setDismissedNotifBanner(true);
+                  }}
+                  className="px-2.5 py-1 bg-white text-slate-900 rounded-lg font-bold text-[11px] cursor-pointer hover:bg-slate-100 shadow-xs active:scale-95"
+                >
+                  চালু করুন
+                </button>
+                <button
+                  onClick={() => setDismissedNotifBanner(true)}
+                  className="p-1 hover:bg-black/20 rounded cursor-pointer text-white/80"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           )}
 
           {/* B. MAIN INTERFACE CONTENT: Desktop Rail + List Views + Active Chat */}
@@ -523,6 +596,24 @@ function MainAppContent() {
 
                   <div className="w-6 h-px bg-slate-200 dark:bg-slate-800 my-1" />
 
+                  {/* Dial Pad */}
+                  <button
+                    onClick={() => setShowDialPadModal(true)}
+                    title="ডায়াল প্যাড (Dial Pad)"
+                    className="relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all cursor-pointer text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                  >
+                    <PhoneCall className="w-5 h-5" />
+                  </button>
+
+                  {/* Call Another Mobile / 2nd Phone */}
+                  <button
+                    onClick={() => setShowCallAnotherMobileModal(true)}
+                    title="অন্য মোবাইলে কল দিন / Call Another Mobile"
+                    className="relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all cursor-pointer bg-gradient-to-tr from-emerald-500 to-sky-500 text-white shadow-md hover:scale-105 active:scale-95 animate-pulse"
+                  >
+                    <Smartphone className="w-5 h-5" />
+                  </button>
+
                   {/* Quick App Lock button */}
                   <button
                     onClick={lockApp}
@@ -536,7 +627,7 @@ function MainAppContent() {
                   <button
                     onClick={() => setShowAndroidModal(true)}
                     title="Android App ডাউনলোড ও ইনস্টল"
-                    className="relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all cursor-pointer text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                    className="relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all cursor-pointer text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
                     <Smartphone className="w-5 h-5" />
                   </button>
@@ -680,6 +771,8 @@ function MainAppContent() {
                   onMessageClick={handleOpenChat}
                   onAudioCallClick={(c) => handleStartCall(c, 'audio')}
                   onVideoCallClick={(c) => handleStartCall(c, 'video')}
+                  onOpenCallAnotherMobile={() => setShowCallAnotherMobileModal(true)}
+                  onOpenDialPad={() => setShowDialPadModal(true)}
                 />
               )}
 
@@ -688,6 +781,8 @@ function MainAppContent() {
                   currentUserId={user.userId}
                   allUsers={allUsers}
                   onCallUser={handleStartCall}
+                  onOpenCallAnotherMobile={() => setShowCallAnotherMobileModal(true)}
+                  onOpenDialPad={() => setShowDialPadModal(true)}
                 />
               )}
 
@@ -832,6 +927,25 @@ function MainAppContent() {
       <AndroidAppDownloadModal
         isOpen={showAndroidModal}
         onClose={() => setShowAndroidModal(false)}
+      />
+
+      {/* 2nd Mobile Pairing & Calling Modal */}
+      <CallAnotherMobileModal
+        isOpen={showCallAnotherMobileModal}
+        onClose={() => setShowCallAnotherMobileModal(false)}
+        currentUser={user}
+        demoUsers={demoUsers}
+        onSwitchUser={(newUser) => switchDemoUser(newUser)}
+        onStartCall={(targetUser, type) => startCall(targetUser, type)}
+      />
+
+      {/* Phone Dial Pad Modal */}
+      <DialPadModal
+        isOpen={showDialPadModal}
+        onClose={() => setShowDialPadModal(false)}
+        contacts={allUsers.length > 0 ? allUsers : demoUsers}
+        currentUserId={user.userId}
+        onStartCall={(targetUser, type) => startCall(targetUser, type)}
       />
     </div>
   );

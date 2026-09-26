@@ -20,6 +20,7 @@ export class WebRTCService {
   private callbacks: WebRTCCallbacks = {};
   private isScreenSharing: boolean = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];
+  private currentFacingMode: 'user' | 'environment' = 'user';
 
   constructor(callbacks?: WebRTCCallbacks) {
     if (callbacks) {
@@ -32,7 +33,7 @@ export class WebRTCService {
   }
 
   /**
-   * Builds ICE servers list including public Google STUN and optional custom TURN servers.
+   * Builds ICE servers list including public Google STUN and resilient TURN relay servers for mobile carriers.
    */
   public getIceServers(): RTCConfiguration {
     const iceServers: RTCIceServer[] = [
@@ -42,6 +43,17 @@ export class WebRTCService {
       { urls: 'stun:stun3.l.google.com:19302' },
       { urls: 'stun:stun4.l.google.com:19302' },
       { urls: 'stun:stun.cloudflare.com:3478' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
+      // Reliable public TURN servers for mobile networks behind symmetric NAT
+      {
+        urls: [
+          'turn:openrelay.metered.ca:80',
+          'turn:openrelay.metered.ca:443',
+          'turn:openrelay.metered.ca:443?transport=tcp',
+        ],
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
     ];
 
     const turnUrl = import.meta.env.VITE_TURN_URL || localStorage.getItem('connectcall_turn_url');
@@ -82,11 +94,22 @@ export class WebRTCService {
         video: video ? {
           width: { ideal: 1280 },
           height: { ideal: 720 },
-          facingMode: 'user',
+          facingMode: { ideal: this.currentFacingMode },
         } : false,
       };
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (firstErr) {
+        // Fallback for mobile devices that error on strict constraints
+        console.warn('Strict constraints failed, falling back to basic media constraints', firstErr);
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: audio ? true : false,
+          video: video ? { facingMode: this.currentFacingMode } : false,
+        });
+      }
+
       this.localStream = stream;
 
       const vTrack = stream.getVideoTracks()[0];
@@ -109,6 +132,50 @@ export class WebRTCService {
       }
       this.callbacks.onError?.(errorMsg);
       throw new Error(errorMsg);
+    }
+  }
+
+  /**
+   * Switches mobile camera between Front and Rear facing camera during a video call.
+   */
+  public async switchCameraFacing(): Promise<MediaStreamTrack | null> {
+    if (!this.localStream) return null;
+    const oldTrack = this.localStream.getVideoTracks()[0];
+    if (!oldTrack) return null;
+
+    this.currentFacingMode = this.currentFacingMode === 'user' ? 'environment' : 'user';
+
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: this.currentFacingMode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      });
+
+      const newTrack = newStream.getVideoTracks()[0];
+      if (!newTrack) return null;
+
+      // Replace track on RTCPeerConnection sender
+      if (this.pc) {
+        const senders = this.pc.getSenders();
+        const videoSender = senders.find((s) => s.track && s.track.kind === 'video');
+        if (videoSender) {
+          await videoSender.replaceTrack(newTrack);
+        }
+      }
+
+      this.localStream.removeTrack(oldTrack);
+      oldTrack.stop();
+      this.localStream.addTrack(newTrack);
+      this.cameraTrack = newTrack;
+      return newTrack;
+    } catch (err) {
+      console.warn('Could not switch camera facing mode:', err);
+      // revert mode
+      this.currentFacingMode = this.currentFacingMode === 'user' ? 'environment' : 'user';
+      return null;
     }
   }
 
